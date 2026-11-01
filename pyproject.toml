@@ -1,7 +1,7 @@
-[project]
-name = "yq-fusion"
+﻿[project]
+name = "multi-agent-video-workflow"
 version = "0.1.0"
-description = "YanQue-Media-Fusion: 可中断可反馈的内容生成 → 成品渲染 → 发布管线"
+description = "Multi-agent-video-workflow: 可中断可反馈的内容生成 → 成品渲染 → 发布管线"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

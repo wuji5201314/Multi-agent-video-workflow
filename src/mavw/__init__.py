@@ -1,4 +1,4 @@
-"""YanQue-Media-Fusion：内容生成 → 成品渲染 → 发布 的一体化融合项目。
+﻿"""Multi-agent-video-workflow：内容生成 → 成品渲染 → 发布 的一体化融合项目。
 
 来源分工：
 - 编排（人工确认 / 可中断 / 可反馈）：移植自 YanQue-AI 的 LangGraph 内容生成链路；

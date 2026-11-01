@@ -1,4 +1,4 @@
-# aimedia × Multi-Agent-Video-Creation 融合方案（渲染层已落地）
+﻿# aimedia × Multi-Agent-Video-Creation 融合方案（渲染层已落地）
 
 > 分析 + 方案；实现进度见第 9 节（渲染层已落地并自测通过）。
 > 仓库源码已抓取到本地基线：`D:\AGI\mavc-src`（52 文件 / 约 1.1MB，GitHub raw 抓取，git clone 因 https helper 缺失失败）。
@@ -239,7 +239,7 @@ GET /api/v1/render/tasks/rt-8f3a
 结论：**渲染层已融合完成**，编排层保持原样（MPT 仓库没有人工回环能力，编排是 YanQue 侧 LangGraph 的强项，因此只搬渲染）。
 
 > 注：本节记录的是**第一阶段**（把渲染层并回 `YanQue-AI-14` 内部）的落地情况，作为历史留存。
-> 最终交付形态已改为**独立项目** `D:\AGI\YanQue-Media-Fusion`（把渲染层 + 可中断 GATE 编排一起落成可独立运行的服务），
+> 最终交付形态已改为**独立项目** `D:\AGI\Multi-agent-video-workflow`（把渲染层 + 可中断 GATE 编排一起落成可独立运行的服务），
 > 以项目根目录 `README.md` 与 `docs/ARCHITECTURE.md` 为准。
 
 ### 9.1 新增 Python 模块 `src/yanque_ai/modules/media_render/`

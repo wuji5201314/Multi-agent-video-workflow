@@ -1,4 +1,4 @@
-"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
+﻿"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class GateBody(BaseModel):
 def create_app() -> FastAPI:
     settings = get_settings()
     service = PipelineService(settings)
-    app = FastAPI(title="YanQue Media Fusion", version="0.1.0")
+    app = FastAPI(title="Multi-Agent Video Workflow", version="0.1.0")
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:

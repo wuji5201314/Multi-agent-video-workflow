@@ -1,4 +1,4 @@
-# 成片「重复 + 卡顿」修复记录
+﻿# 成片「重复 + 卡顿」修复记录
 
 现象：demo 成片（32.49s）听起来像卡住，画面大字与字幕内容一模一样，字幕还断在半截。
 
@@ -9,10 +9,10 @@
 
 | # | 根因 | 位置 | 修复 |
 | - | ---- | ---- | ---- |
-| 1 | 口播文本 = headline + body 硬拼。headline 已经是画面大字，字幕又从这段文本生成，于是同一句被念两遍、又被显示两遍 | `src/yq_fusion/render/renderer.py:302` `_narration_text` | 有 body 就只念 body，body 为空才退化成念 headline |
-| 2 | edge-tts 每段音频尾部自带 0.85–1.2s 静音，再叠 `NARRATION_GAP_MS` 400ms 与下一镜 0.2s 头静音，镜交界处空音 1.45s | `src/yq_fusion/render/tts.py:36` `TRIM_TAIL_FILTER`、`tts.py:214` `_trim_tail` | 合成后削尾部静音（留 120ms 尾音）；镜间停 400→250ms |
+| 1 | 口播文本 = headline + body 硬拼。headline 已经是画面大字，字幕又从这段文本生成，于是同一句被念两遍、又被显示两遍 | `src/mavw/render/renderer.py:302` `_narration_text` | 有 body 就只念 body，body 为空才退化成念 headline |
+| 2 | edge-tts 每段音频尾部自带 0.85–1.2s 静音，再叠 `NARRATION_GAP_MS` 400ms 与下一镜 0.2s 头静音，镜交界处空音 1.45s | `src/mavw/render/tts.py:36` `TRIM_TAIL_FILTER`、`tts.py:214` `_trim_tail` | 合成后削尾部静音（留 120ms 尾音）；镜间停 400→250ms |
 | 3 | 句号处 TTS 停顿 0.65–0.75s，镜头时长又被 `max(planned)` 抬升，画面空转 | `tts.py:42` `TIGHTEN_PAUSE_FILTER`、`renderer.py:179` `_shot_duration` | 把 >0.55s 的内部静音压回 0.30s（逐词字幕模式跳过）；时长严格跟配音走 |
-| 4 | 字幕按 `max_chars` 硬切中文串，且 ASS `WrapStyle: 2` 不折行 → 断在半截 | `src/yq_fusion/render/subtitle.py:97` `_split_lines`、`subtitle.py:151` | 只在标点处断句，超长交给 `WrapStyle: 0` 自动折行 |
+| 4 | 字幕按 `max_chars` 硬切中文串，且 ASS `WrapStyle: 2` 不折行 → 断在半截 | `src/mavw/render/subtitle.py:97` `_split_lines`、`subtitle.py:151` | 只在标点处断句，超长交给 `WrapStyle: 0` 自动折行 |
 
 ## 实测对比
 
@@ -27,7 +27,7 @@
 ## 复现命令
 
 ```powershell
-cd D:\AGI\YanQue-Media-Fusion
+cd D:\AGI\Multi-agent-video-workflow
 .\.venv\Scripts\python.exe scripts\demo.py --brief AI剪辑入门 --auto
 .\.venv\Scripts\python.exe scripts\dump_script.py   # 核对大字 / 口播是否还重复
 ```

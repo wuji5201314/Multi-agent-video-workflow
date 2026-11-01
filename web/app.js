@@ -1,4 +1,4 @@
-/* YanQue Media 前端：原生 JS，无构建依赖。
+﻿/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
    与后端约定：
    - GET  /api/health
    - GET  /api/tasks

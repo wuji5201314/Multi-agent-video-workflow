@@ -1,4 +1,4 @@
-# YanQue-Media-Fusion
+﻿# Multi-agent-video-workflow
 
 把「内容生成 → 成品渲染 → 发布」做成一条**可以随时停下来改、改完接着跑**的自媒体流水线。
 
@@ -15,7 +15,7 @@
 ## 快速开始
 
 ```powershell
-cd D:\AGI\YanQue-Media-Fusion
+cd D:\AGI\Multi-agent-video-workflow
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install fastapi "uvicorn[standard]" httpx pydantic pillow edge-tts imageio-ffmpeg python-dotenv
 
@@ -75,7 +75,7 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 
 `java/aimedia-module/` 是从 yq-admin 原样复制过来的 `com.yanque.aimedia` 包（187 个文件中占 133 个 java/xml），**不是本服务的运行时**，作用是字段与状态语义的对照物：枚举、实体、Mapper、Handler、Controller 都保持你原来的样子，方便以后并回 yq-admin 时逐项对齐。
 
-真正跑起来的是 `src/yq_fusion`（Python）。两者没有代码级耦合，唯一契约是 `/ai/content-generation/topics/previews/render` 这个同名同形的接口。
+真正跑起来的是 `src/mavw`（Python）。两者没有代码级耦合，唯一契约是 `/ai/content-generation/topics/previews/render` 这个同名同形的接口。
 
 ## 配置
 
@@ -113,7 +113,7 @@ POST /ai/content-generation/topics/previews/render
 ## 目录
 
 ```
-src/yq_fusion/
+src/mavw/
   config.py            全部开关（30+ 项，命名与 YanQue-AI 对齐）
   storage.py           本地存储 / TOS 预签名存储
   llm.py               选题与脚本（大模型 + 内置模板兜底）
@@ -138,7 +138,7 @@ docs/ARCHITECTURE.md   融合映射与扩展点
 # 已就绪：D:\AGI\tools\MinGit（2.56.0.4）+ D:\AGI\tools\git-gh.cmd
 # 以后在这个仓库里，把 git 换成 git-gh 即可
 cmd /c "D:\AGI\tools\git-gh.cmd" status
-cmd /c "D:\AGI\tools\git-gh.cmd" push origin main:feat/yanque-media-fusion
+cmd /c "D:\AGI\tools\git-gh.cmd" push origin main:feat/Multi-agent-video-workflow
 ```
 
 包装脚本里有三件必须的事：`GIT_SSL_CAINFO` 指向 MinGit 自带证书（否则报

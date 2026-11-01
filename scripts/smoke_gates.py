@@ -1,4 +1,4 @@
-"""验证「可中断 + 可反馈」：不打网络、不渲染，只跑 GATE 状态机。
+﻿"""验证「可中断 + 可反馈」：不打网络、不渲染，只跑 GATE 状态机。
 
 覆盖：建任务 → 停在选题 GATE → 选第 2 个选题 → 停在脚本 GATE →
 打回并附修改要求 → 脚本重跑（后续步骤产物失效）→ 进程重启后从库里恢复继续。
@@ -13,9 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from yq_fusion.config import Settings  # noqa: E402
-from yq_fusion.pipeline.service import PipelineService  # noqa: E402
-from yq_fusion.pipeline.steps import Step  # noqa: E402
+from mavw.config import Settings  # noqa: E402
+from mavw.pipeline.service import PipelineService  # noqa: E402
+from mavw.pipeline.steps import Step  # noqa: E402
 
 
 def _settings(tmp: Path) -> Settings:

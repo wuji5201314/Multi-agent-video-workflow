@@ -1,4 +1,4 @@
--- YanQue-Media-Fusion 管线库（SQLite，运行时自动建表，这里作为可读快照）
+﻿-- Multi-agent-video-workflow 管线库（SQLite，运行时自动建表，这里作为可读快照）
 -- 复用点：steps.payload 的结构与 yq-admin aimedia 的 preview_plan_json 同构，
 -- 迁移到 MySQL 时把 INTEGER PRIMARY KEY AUTOINCREMENT 换成 BIGINT AUTO_INCREMENT 即可。
 

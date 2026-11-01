@@ -1,4 +1,4 @@
-"""诊断：量一遍每段 TTS 的头尾静音与句内停顿，确认卡顿到底来自哪里。
+﻿"""诊断：量一遍每段 TTS 的头尾静音与句内停顿，确认卡顿到底来自哪里。
 
 用法：python scripts/diag_tts_silence.py
 产物：output/diag/tts/speech-NN.wav（可直接试听）
@@ -17,10 +17,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from types import SimpleNamespace  # noqa: E402
 
-from yq_fusion.config import get_settings  # noqa: E402
-from yq_fusion.render.ffmpeg_tools import ffmpeg_executable, probe_duration_ms  # noqa: E402
-from yq_fusion.render.renderer import _narration_text  # noqa: E402
-from yq_fusion.render.tts import VoiceSynthesizer  # noqa: E402
+from mavw.config import get_settings  # noqa: E402
+from mavw.render.ffmpeg_tools import ffmpeg_executable, probe_duration_ms  # noqa: E402
+from mavw.render.renderer import _narration_text  # noqa: E402
+from mavw.render.tts import VoiceSynthesizer  # noqa: E402
 
 SHOTS = [
     ("很多人以为AI剪辑入门很简单", "很多人以为AI剪辑入门很简单，其实第一步就错了。"),

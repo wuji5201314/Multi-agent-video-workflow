@@ -1,4 +1,4 @@
-"""一条命令跑完整条管线：选题 → 脚本 → 素材 → 成片 → 发布单。
+﻿"""一条命令跑完整条管线：选题 → 脚本 → 素材 → 成片 → 发布单。
 
 用法：
     python scripts/demo.py --brief "AI 剪辑入门" --auto          # 全自动，出片即止
@@ -16,9 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from yq_fusion.config import get_settings  # noqa: E402
-from yq_fusion.pipeline.service import PipelineService  # noqa: E402
-from yq_fusion.pipeline.steps import Step  # noqa: E402
+from mavw.config import get_settings  # noqa: E402
+from mavw.pipeline.service import PipelineService  # noqa: E402
+from mavw.pipeline.steps import Step  # noqa: E402
 
 
 def _print_step(task: dict, step_code: str) -> None:
@@ -93,7 +93,7 @@ async def run(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="YanQue-Media-Fusion 端到端演示")
+    parser = argparse.ArgumentParser(description="Multi-agent-video-workflow 端到端演示")
     parser.add_argument("--brief", default="AI 剪辑入门", help="内容简报")
     parser.add_argument("--task-id", type=int, default=0, help="从已有任务继续")
     parser.add_argument("--auto", action="store_true", help="自动确认所有 GATE")

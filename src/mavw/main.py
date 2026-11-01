@@ -1,4 +1,4 @@
-"""服务入口：python -m yq_fusion.main 或 scripts/serve.py。"""
+﻿"""服务入口：python -m mavw.main 或 scripts/serve.py。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s - %(message)s",
     )
     uvicorn.run(
-        "yq_fusion.api:app",
+        "mavw.api:app",
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "8010")),
     )
