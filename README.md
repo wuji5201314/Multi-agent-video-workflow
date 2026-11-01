@@ -1,4 +1,4 @@
-﻿# Multi-agent-video-workflow
+# Multi-agent-video-workflow
 
 把「内容生成 → 成品渲染 → 发布」做成一条**可以随时停下来改、改完接着跑**的自媒体流水线。
 
@@ -15,7 +15,7 @@
 ## 快速开始
 
 ```powershell
-cd D:\AGI\Multi-agent-video-workflow
+cd D:\AGI\Multi-agent-video-workflow\backend-python
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install fastapi "uvicorn[standard]" httpx pydantic pillow edge-tts imageio-ffmpeg python-dotenv
 
@@ -112,38 +112,64 @@ POST /ai/content-generation/topics/previews/render
 
 ## 目录
 
+仓库里是两个**互相独立**的后端目录，各自用对应的 IDE 打开即可，不会互相索引：
+
 ```
-src/mavw/
-  config.py            全部开关（30+ 项，命名与 YanQue-AI 对齐）
-  storage.py           本地存储 / TOS 预签名存储
-  llm.py               选题与脚本（大模型 + 内置模板兜底）
-  render/              成片渲染：tts / subtitle / compose / ffmpeg_tools / card(PIL) / renderer
-  pipeline/            步骤定义与可中断状态机（sqlite 落库）
-  publish/             发布适配（dry-run 发布单 / webhook）
-  api.py, main.py      FastAPI 接口层
-java-module/           从 yq-admin 复制过来的 aimedia 包（字段与枚举参照）
-reference/mpt/         渲染层原始参考实现（voice/video/subtitle/bgm/material/task）
-sql/schema.sql         管线库可读快照
-docs/ARCHITECTURE.md   融合映射与扩展点
+Multi-agent-video-workflow/
+├── backend-python/            ← PyCharm 打开这一层
+│   ├── src/mavw/
+│   │   ├── config.py          全部开关（30+ 项）
+│   │   ├── storage.py         本地存储 / TOS 预签名存储
+│   │   ├── llm.py             选题与脚本（大模型 + 内置模板兜底）
+│   │   ├── render/            tts / subtitle / compose / ffmpeg_tools / card(PIL) / renderer
+│   │   ├── pipeline/          步骤定义与可中断状态机（sqlite 落库）
+│   │   ├── publish/           发布适配（dry-run 发布单 / webhook）
+│   │   └── api.py, main.py    FastAPI 接口层
+│   ├── scripts/               demo / serve / smoke / 诊断脚本
+│   ├── web/                   前端（index.html + app.css + app.js）
+│   ├── reference/mpt/         渲染层原始参考实现
+│   ├── sql/schema.sql         管线库可读快照
+│   ├── output/                运行产物（已 gitignore）
+│   ├── .venv/                 虚拟环境（已 gitignore）
+│   ├── pyproject.toml
+│   └── .env.example
+├── backend-java/              ← IDEA 打开这一层
+│   └── aimedia-module/
+│       ├── pom.xml            仅为 IDE 索引提供的骨架（见下）
+│       └── src/main/java/com/yanque/aimedia/...
+└── docs/                      两边共享的文档
 ```
 
-## 在这台机器上提交（Git 补丁说明）
+## 用两个 IDE 打开
 
-本机 `D:\Git\Git` 只带了 `git-remote-ftp`，缺 `git-remote-http/https`，任何 `git clone/push` 都会报
-`git: 'remote-https' is not a git command`。winget 升级失败是因为 DSH 自身的 bash.exe 正占用该目录。
+| 工具 | 打开路径 | 做什么 |
+|------|----------|--------|
+| **PyCharm** | `D:\AGI\Multi-agent-video-workflow\backend-python` | 唯一的运行时。解释器选 `backend-python\.venv\Scripts\python.exe`，源码根 `src` |
+| **IDEA** | `D:\AGI\Multi-agent-video-workflow\backend-java` | 只看 Java 对照代码。打开后 Maven 自动识别 `aimedia-module\pom.xml` |
 
-绕过方式：用便携版 MinGit 2.56 + 一个包装脚本。
+两边各自打开子目录，所以 PyCharm 不会去索引 `.java`，IDEA 也不会去索引 Python，虚拟环境与构建缓存互不干扰。
 
-```powershell
-# 已就绪：D:\AGI\tools\MinGit（2.56.0.4）+ D:\AGI\tools\git-gh.cmd
-# 以后在这个仓库里，把 git 换成 git-gh 即可
-cmd /c "D:\AGI\tools\git-gh.cmd" status
-cmd /c "D:\AGI\tools\git-gh.cmd" push origin main:feat/Multi-agent-video-workflow
+**IDEA 里飘红是预期的。** `backend-java` 是从 yq-admin 原样复制过来的 `com.yanque.aimedia` 包，其中 46 处引用了 yq-admin 的公共模块 `com.yanque.common.*`（用户上下文、统一响应、异常基类），这些不在本仓库里。`pom.xml` 只是为了让 IDEA 把 `src/main/java` 认成源码根、能跳转和全局搜索，**不是可独立构建的工程**。真要编译与运行，把 `aimedia-module/src` 合并回 yq-admin 对应模块。
+
+如果连飘红都不想看，`backend-java` 当成纯文本对照目录也行：IDEA 里 `File → Open` 选这个文件夹，不加载 Maven 项目即可。
+
+## 这台机器上的 Git 已经修好了
+
+原先 `D:\Git\Git` 只有 `git-remote-ftp.exe`，缺 `git-remote-http.exe` 与 `git-remote-https.exe`
+（同目录下 `git-http-backend`、`git-http-fetch`、`git-http-push` 都在，唯独这两个不见，像是被清理工具
+单独删掉的），所以 Git Bash 里 `git clone/push https://...` 一律报 `git: 'remote-https' is not a git command`。
+
+现在已从便携版 MinGit 补回这两个文件：
+
+```
+D:\Git\Git\mingw64\libexec\git-core\git-remote-http.exe
+D:\Git\Git\mingw64\libexec\git-core\git-remote-https.exe
 ```
 
-包装脚本里有三件必须的事：`GIT_SSL_CAINFO` 指向 MinGit 自带证书（否则报
-`error adding trust anchors from C:/Program Files/Git/.../ca-bundle.crt`）、`GIT_EXEC_PATH` 指向
-ucrt64 的 git-core、以及调用 `D:\AGI\tools\MinGit\cmd\git.exe`。
+Git Bash 与 cmd 里直接用原生 `git` 即可，不再需要包装脚本。万一哪天又坏了（比如重装 Git 前），
+兜底方案是 `D:\AGI\tools\git-gh.cmd`——它用 `D:\AGI\tools\MinGit` 的 git，并设置
+`GIT_SSL_CAINFO`（MinGit 编译期证书路径指向不存在的 `C:/Program Files/Git/...`，不设就报
+`error adding trust anchors`）与 `GIT_EXEC_PATH`。
 
 ## 边界
 
