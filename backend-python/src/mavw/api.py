@@ -6,13 +6,20 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import get_settings
+from .images import (
+    AnalyzeRequest,
+    AnalyzeResponse,
+    ImageGenerateRequest,
+    ImageGenerateResponse,
+    ImageStudio,
+)
 from .pipeline.service import PipelineService
 from .pipeline.steps import Step
 from .render.models import RenderRequest, RenderResult
@@ -31,10 +38,15 @@ class GateBody(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+# 上传参考图的体积上限，避免一次 POST 把内存打满
+_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     service = PipelineService(settings)
-    app = FastAPI(title="Multi-Agent Video Workflow", version="0.1.0")
+    studio = ImageStudio(settings)
+    app = FastAPI(title="Multi-Agent Video Workflow", version="0.2.0")
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -120,6 +132,83 @@ def create_app() -> FastAPI:
         if request.format != "VIDEO":
             raise HTTPException(status_code=400, detail="本项目只处理 format=VIDEO 的成片请求。")
         return await service.render_preview(request)
+
+    # ---------------- 图片工作台 ----------------
+
+    @app.get("/api/images/options")
+    async def image_options() -> dict[str, Any]:
+        """把预设交给前端渲染，避免两边各写一份配置。"""
+
+        from .images import presets
+
+        return {
+            "ratios": [{"key": r.key, "label": r.label, "width": r.width, "height": r.height} for r in presets.RATIOS.values()],
+            "styles": [{"key": s.key, "label": s.label} for s in presets.STYLES.values()],
+            "qualities": [
+                {"key": q.key, "label": q.label, "steps": q.steps, "cfg_scale": q.cfg_scale}
+                for q in presets.QUALITIES.values()
+            ],
+            "models": [{"key": key, "label": key} for key in presets.MODELS],
+            "has_image_key": bool(settings.image_api_key),
+            "vision_model": settings.vision_model,
+        }
+
+    @app.post("/api/images/generate", response_model=ImageGenerateResponse)
+    async def images_generate(body: ImageGenerateRequest) -> ImageGenerateResponse:
+        try:
+            return await studio.generate(body)
+        except Exception as exc:  # noqa: BLE001 - 把模型侧错误原样回给前端
+            logger.exception("图片生成失败")
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/api/images/upload")
+    async def images_upload(request: Request) -> dict[str, str]:
+        """按原始二进制收图（不依赖 multipart），返回可被 generate 引用的文件名。"""
+
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="空文件")
+        if len(body) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="图片超过 20MB")
+        content_type = (request.headers.get("content-type") or "").lower()
+        suffix = ".png"
+        if "jpeg" in content_type or "jpg" in content_type:
+            suffix = ".jpg"
+        elif "webp" in content_type:
+            suffix = ".webp"
+        name = studio.save_upload(body, suffix)
+        return {"file": name, "url": f"/api/images/uploads/{name}"}
+
+    @app.post("/api/images/analyze", response_model=AnalyzeResponse)
+    async def images_analyze(body: AnalyzeRequest) -> AnalyzeResponse:
+        try:
+            return await studio.analyze(body.file, body.instruction)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="参考图不存在") from exc
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.get("/api/images/history")
+    async def images_history(limit: int = 40) -> list[dict[str, Any]]:
+        return studio.history(limit)
+
+    @app.delete("/api/images/{image_id}")
+    async def images_delete(image_id: str) -> dict[str, bool]:
+        return {"deleted": studio.delete(image_id)}
+
+    @app.get("/api/images/files/{file_name}")
+    async def images_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(studio.image_path(file_name))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="图片不存在") from exc
+
+    @app.get("/api/images/uploads/{file_name}")
+    async def images_upload_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(studio.upload_path(file_name))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="参考图不存在") from exc
 
     # 前端可能由 yq-admin 的 web 容器托管在别的端口，跨源调用这些 /api 时需要放行。
     origins = [item.strip() for item in settings.cors_origins.split(",") if item.strip()]

@@ -696,7 +696,7 @@
   /* ---------------- 启动 ---------------- */
 
   function bindGlobal() {
-    el('btn-new').addEventListener('click', openSheet);
+    el('btn-new-video').addEventListener('click', openSheet);
     el('btn-cancel').addEventListener('click', closeSheet);
     el('btn-create').addEventListener('click', createTask);
     el('btn-refresh').addEventListener('click', function () {
@@ -728,10 +728,18 @@
     });
   }
 
+  var videoBooted = false;
+
   function boot() {
     bindGlobal();
     refreshHealth();
     setInterval(refreshHealth, 30000);
+    videoBooted = true;
+    // 图片工作台切到"视频"时会调这个，保证任务列表已加载
+    window.__videoBoot = function () {
+      if (!videoBooted) { boot(); return; }
+      loadTasks();
+    };
     loadTasks().then(function (rows) {
       if (rows && rows.length) {
         openTask(rows[0].id);

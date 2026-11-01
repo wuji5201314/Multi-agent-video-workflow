@@ -120,6 +120,8 @@ class Settings:
     image_retries: int = 3
     # 同一 prompt 固定 seed 便于复现；0 表示每次随机
     image_seed: int = 0
+    # 看图写词用的视觉模型（上传参考图后先描述再重绘）
+    vision_model: str = "meta/llama-3.2-90b-vision-instruct"
 
     # ---------- 前端 ----------
     # 前端源码放在 backend-java/frontend，将来跟 yq-admin 的 web 端一起部署；
@@ -210,6 +212,7 @@ def get_settings() -> Settings:
         image_timeout_seconds=_int("IMAGE_TIMEOUT_SECONDS", 180),
         image_retries=_int("IMAGE_RETRIES", 3),
         image_seed=_int("IMAGE_SEED", 0),
+        vision_model=_str("VISION_MODEL", "meta/llama-3.2-90b-vision-instruct"),
         pipeline_db_path=_str("PIPELINE_DB_PATH", ""),
         pipeline_output_dir=_str("PIPELINE_OUTPUT_DIR", ""),
         pipeline_auto_approve=_bool("PIPELINE_AUTO_APPROVE", False),
