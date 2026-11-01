@@ -76,6 +76,40 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 1. **比例**：flux 的 `aspect_ratio` 合法值里没有 `9:16`（只有 `9:21 / 1:2 / 2:3 / 3:4 / 1:1 / 4:3 ...`）。代码用 `1:2` 生成，再由 `generate/nvidia.py` 的 `cover_resize` 等比缩放后居中裁成 1080×1920，画面不变形。
 2. **文字**：flux 画中文 UI 会得到满屏伪汉字。所以 prompt 里硬性要求「实拍照片，不要界面/截图/文字」；`_material_prompt` 还会把含「界面 / 按钮 / 截图 / 进度条」的描述自动改写成实拍隐喻。文案侧的 `image_query` 也在 prompt 里被约束成「只写人物、场景、物件、光线、景别」。
 
+### 数字人画中画（可选层）
+
+`DIGITAL_HUMAN_ENABLED=true` 会在成片右上角叠一个圆角小窗，里面是「对着镜头说话」的数字人。
+它只加一层画面，**不改状态机、不改 API、不改 Java 契约**，关掉就和原来一模一样。
+
+为什么挂在 RENDER 而不是 MATERIAL：数字人是音频驱动，而口播音频要到 RENDER 阶段的
+`_synthesize` 才生成。所以小窗在 `renderer._build_shots` 之后、烧字幕之前合成——
+一次覆盖全片，人物形象全程连续，不会在镜头切换处「换脸」；字幕最后烧，永远压在最上层。
+
+三个 provider，按显存换：
+
+| provider | 显存 | 用途 |
+| --- | --- | --- |
+| `placeholder` | 0 | Pillow + FFmpeg 画的占位主播，离线可跑，用来先定版式 |
+| `wav2lip` | 2-4GB | 本地对口型，人脸来自参考图，小窗下精度足够 |
+| `api` | 0 | 远程推理，本地零算力，效果最好 |
+
+摆位 `DIGITAL_HUMAN_PIP_POSITION` 支持四个角；选 `bottom-*` 时会用
+`compose.subtitle_reserve()` 自动让出字幕高度与顶部平台 UI，不会压字。
+
+生成结果按「参考图 + 音频 + 尺寸 + provider」的内容哈希缓存在 `output/digital-human-cache/`：
+GATE 上只改标题文案（音频没变）时直接命中，不用重烧几分钟算力。
+provider 出任何错都只记 warning 并出原片，不会让一条已渲染完成的片子作废。
+
+单独调这一层（不用跑整条管线）：
+
+```powershell
+$env:DIGITAL_HUMAN_ENABLED='true'
+.\.venv\Scripts\python.exe scripts\diag_digital_human.py --duration 4 --position top-right
+```
+
+产物在 `output/diag/digital-human/`，含 `avatar.mp4`（provider 原始输出）、
+`picture.mp4`（叠加后画面）和若干抽帧，用来核对位置与遮挡。
+
 ### 视频模型现状
 
 `wan2.2-animate-2-14b` 目前**调不通**：`POST https://ai.api.nvidia.com/v1/genai/wan-ai/wan2.2-animate-2-14b` 返回 404（换成 `integrate.api.nvidia.com`、`/v1/video/generations` 等路径同样 404），说明这个 key 的账号还没对该模型开通 API。另外它本身是 **video editing（图+动作视频 → 动画）**，不是文生视频。

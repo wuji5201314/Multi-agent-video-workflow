@@ -25,8 +25,21 @@ import httpx
 from ..config import Settings
 from ..storage import build_storage, internal_headers
 from .card import render_cover_card
-from .compose import ComposeOptions, VideoComposer
-from .ffmpeg_tools import MediaRenderError, probe_duration_ms, silence_wav
+from .compose import ComposeOptions, VideoComposer, pip_origin, subtitle_reserve
+from .digital_human import (
+    DigitalHumanCache,
+    DigitalHumanSpec,
+    border_png,
+    build_digital_human,
+    rounded_mask_png,
+)
+from .ffmpeg_tools import (
+    MediaRenderError,
+    ffmpeg_executable,
+    probe_duration_ms,
+    run,
+    silence_wav,
+)
 from .models import RenderResult
 from .subtitle import SubtitleCue, build_cues, write_ass, write_srt
 from .tts import SpeechAsset, VoiceSynthesizer, normalize_script
@@ -59,6 +72,9 @@ class VideoPreviewRenderer:
         self._storage = storage or build_storage(settings)
         # Java 端 /internal/** 由 InternalApiInterceptor 保护，缺这个头会 401。
         self._internal_headers = internal_headers(settings)
+        # 数字人是可选层：DIGITAL_HUMAN_ENABLED=false 时 _avatar 为 None，整段逻辑不做。
+        self._avatar = build_digital_human(settings)
+        self._avatar_cache = DigitalHumanCache(settings.digital_human_cache())
 
     async def render(self, request: object) -> object:
         """按素材顺序合成一条完整成品视频并上传封面与 MP4。"""
@@ -85,11 +101,17 @@ class VideoPreviewRenderer:
                 )
                 silent = workdir / "silent.mp4"
                 await asyncio.to_thread(self._composer.concat, clips, silent)
-                picture = silent
-                if cues:
-                    picture = await self._burn(silent, cues, workdir)
                 narration = workdir / "narration.wav"
                 await asyncio.to_thread(self._composer.build_narration, voices, narration)
+                picture = silent
+                if self._avatar is not None:
+                    # 画中画先叠、字幕后烧：字幕永远压在最上层，不会被小窗盖住；
+                    # 而且一次覆盖全片，人物形象全程连续，不会在镜头切换处「换脸」。
+                    picture = await self._apply_digital_human(
+                        silent, narration, sources, workdir
+                    )
+                if cues:
+                    picture = await self._burn(picture, cues, workdir)
                 final = workdir / "final.mp4"
                 await asyncio.to_thread(
                     self._composer.mux,
@@ -224,6 +246,136 @@ class VideoPreviewRenderer:
             logger.warning("字幕烧录失败，改为无字幕输出：%s", exc)
             return video
         return output
+
+    async def _apply_digital_human(
+        self,
+        video: Path,
+        narration: Path,
+        sources: list[Path],
+        workdir: Path,
+    ) -> Path:
+        """把数字人小窗叠到成片上；任何失败都退回无画中画的原片。
+
+        数字人是整条链路里唯一依赖外部模型与算力的环节，它坏掉不应该让一条已经
+        渲染完成的片子作废，所以这里不上抛异常，只记 warning 并出原片。
+        """
+
+        if self._avatar is None:
+            return video
+        settings = self._settings
+        reference = self._reference_image(sources, workdir)
+        if reference is None:
+            logger.warning("没有可用的形象参考图，跳过数字人画中画。")
+            return video
+
+        width = max(64, settings.digital_human_pip_width)
+        height = max(64, settings.digital_human_pip_height)
+        radius = max(0, min(settings.digital_human_pip_radius, min(width, height) // 2))
+        try:
+            duration_ms = await asyncio.to_thread(probe_duration_ms, video)
+            spec = DigitalHumanSpec(
+                reference_image=reference,
+                audio=narration,
+                duration_ms=duration_ms,
+                output=workdir / "avatar.mp4",
+                width=width,
+                height=height,
+                fps=self._options.fps,
+            )
+            # 缓存键带上 provider 与摆放位置：换位置不该命中旧片段（旧片段已烧进边框位置感），
+            # 但只改标题文案时音频未变，应当命中。
+            cache_key = spec.cache_key(
+                self._avatar.name,
+                extra=f"{settings.digital_human_pip_position}|{width}x{height}",
+            )
+            cached = self._avatar_cache.get(cache_key)
+            if cached is not None:
+                avatar = workdir / "avatar-cached.mp4"
+                avatar.write_bytes(cached.read_bytes())
+            else:
+                avatar = await self._avatar.generate(spec)
+                self._avatar_cache.put(cache_key, avatar)
+
+            mask = workdir / "pip-mask.png"
+            mask.write_bytes(rounded_mask_png(width, height, radius))
+            border = workdir / "pip-border.png"
+            border.write_bytes(
+                border_png(width, height, radius, max(1, settings.digital_human_pip_border))
+            )
+            x, y = pip_origin(
+                settings.digital_human_pip_position,
+                (self._options.width, self._options.height),
+                (width, height),
+                settings.digital_human_pip_margin,
+                subtitle_reserve(
+                    settings.media_render_subtitle_margin_v,
+                    settings.media_render_subtitle_font_size,
+                ),
+            )
+            output = workdir / "picture-with-avatar.mp4"
+            await asyncio.to_thread(
+                self._composer.compose_pip,
+                video,
+                avatar,
+                mask,
+                border,
+                output,
+                x=x,
+                y=y,
+                duration_ms=duration_ms,
+                radius=radius,
+            )
+            logger.info(
+                "数字人画中画已合成：provider=%s，位置=(%s,%s)，尺寸=%sx%s",
+                self._avatar.name,
+                x,
+                y,
+                width,
+                height,
+            )
+            return output
+        except Exception as exc:  # noqa: BLE001 - 画中画失败不应该让成片作废
+            logger.warning("数字人画中画失败，退回无画中画输出：%s", exc)
+            return video
+
+    def _reference_image(self, sources: list[Path], workdir: Path) -> Path | None:
+        """形象参考图：显式配置优先，其次借用第一镜的图片素材，最后从视频首帧抽一张。"""
+
+        configured = self._settings.digital_human_reference_image.strip()
+        if configured:
+            path = Path(configured)
+            if path.is_file():
+                return path
+            logger.warning("配置的形象参考图不存在：%s", path)
+
+        for source in sources:
+            if source.suffix.lower() in IMAGE_SUFFIXES and source.is_file():
+                return source
+
+        for source in sources:
+            if source.suffix.lower() in IMAGE_SUFFIXES or not source.is_file():
+                continue
+            still = workdir / "avatar-reference.png"
+            try:
+                run(
+                    [
+                        ffmpeg_executable(),
+                        "-y",
+                        "-i",
+                        str(source),
+                        "-frames:v",
+                        "1",
+                        "-update",
+                        "1",
+                        str(still),
+                    ],
+                    timeout=60,
+                )
+                if still.is_file() and still.stat().st_size > 0:
+                    return still
+            except MediaRenderError as exc:
+                logger.warning("从视频抽取形象参考帧失败：%s", exc)
+        return None
 
     def _pick_bgm(self) -> Path | None:
         """从本地 BGM 目录随机挑一首，关闭开关或目录为空时返回 None。"""

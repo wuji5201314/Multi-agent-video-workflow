@@ -65,6 +65,32 @@ class Settings:
     media_render_subtitle_margin_v: int = 420
     media_render_subtitle_pop: bool = False
 
+    # ---------- 数字人（L2 画中画） ----------
+    # 关闭时不产生任何额外算力开销，整条链路与原来完全一致。
+    digital_human_enabled: bool = False
+    # placeholder=离线占位主播（零算力）；wav2lip=本地轻量对口型；api=远程推理
+    digital_human_provider: str = "placeholder"
+    digital_human_pip_width: int = 320
+    digital_human_pip_height: int = 400
+    digital_human_pip_position: str = "top-right"
+    digital_human_pip_margin: int = 48
+    digital_human_pip_radius: int = 26
+    digital_human_pip_border: int = 4
+    # 参考形象：留空则自动取第一镜素材当形象，零配置也能跑通
+    digital_human_reference_image: str = ""
+    digital_human_cache_dir: str = ""
+    digital_human_timeout_seconds: int = 1800
+    # wav2lip
+    digital_human_wav2lip_dir: str = ""
+    digital_human_wav2lip_checkpoint: str = ""
+    digital_human_wav2lip_static: bool = False
+    digital_human_python: str = ""
+    # api
+    digital_human_api_url: str = ""
+    digital_human_api_key: str = ""
+    digital_human_api_image_field: str = "image"
+    digital_human_api_audio_field: str = "audio"
+
     # ---------- BGM ----------
     media_render_bgm_enabled: bool = False
     media_render_bgm_dir: str = ""
@@ -158,6 +184,14 @@ class Settings:
         path = Path(raw)
         return path if path.is_absolute() else PROJECT_ROOT / path
 
+    def digital_human_cache(self) -> Path:
+        """数字人片段缓存目录，跟随 output 一起被 gitignore。"""
+
+        if self.digital_human_cache_dir:
+            path = Path(self.digital_human_cache_dir)
+            return path if path.is_absolute() else PROJECT_ROOT / path
+        return self.output_dir() / "digital-human-cache"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -180,6 +214,25 @@ def get_settings() -> Settings:
         media_render_bgm_enabled=_bool("MEDIA_RENDER_BGM_ENABLED", False),
         media_render_bgm_dir=_str("MEDIA_RENDER_BGM_DIR", ""),
         media_render_bgm_volume=_float("MEDIA_RENDER_BGM_VOLUME", 0.2),
+        digital_human_enabled=_bool("DIGITAL_HUMAN_ENABLED", False),
+        digital_human_provider=_str("DIGITAL_HUMAN_PROVIDER", "placeholder"),
+        digital_human_pip_width=_int("DIGITAL_HUMAN_PIP_WIDTH", 320),
+        digital_human_pip_height=_int("DIGITAL_HUMAN_PIP_HEIGHT", 400),
+        digital_human_pip_position=_str("DIGITAL_HUMAN_PIP_POSITION", "top-right"),
+        digital_human_pip_margin=_int("DIGITAL_HUMAN_PIP_MARGIN", 48),
+        digital_human_pip_radius=_int("DIGITAL_HUMAN_PIP_RADIUS", 26),
+        digital_human_pip_border=_int("DIGITAL_HUMAN_PIP_BORDER", 4),
+        digital_human_reference_image=_str("DIGITAL_HUMAN_REFERENCE_IMAGE", ""),
+        digital_human_cache_dir=_str("DIGITAL_HUMAN_CACHE_DIR", ""),
+        digital_human_timeout_seconds=_int("DIGITAL_HUMAN_TIMEOUT_SECONDS", 1800),
+        digital_human_wav2lip_dir=_str("DIGITAL_HUMAN_WAV2LIP_DIR", ""),
+        digital_human_wav2lip_checkpoint=_str("DIGITAL_HUMAN_WAV2LIP_CHECKPOINT", ""),
+        digital_human_wav2lip_static=_bool("DIGITAL_HUMAN_WAV2LIP_STATIC", False),
+        digital_human_python=_str("DIGITAL_HUMAN_PYTHON", ""),
+        digital_human_api_url=_str("DIGITAL_HUMAN_API_URL", ""),
+        digital_human_api_key=_str("DIGITAL_HUMAN_API_KEY", ""),
+        digital_human_api_image_field=_str("DIGITAL_HUMAN_API_IMAGE_FIELD", "image"),
+        digital_human_api_audio_field=_str("DIGITAL_HUMAN_API_AUDIO_FIELD", "audio"),
         media_render_tts_provider=_str("MEDIA_RENDER_TTS_PROVIDER", "edge"),
         media_render_tts_voice=_str("MEDIA_RENDER_TTS_VOICE", "zh-CN-YunxiNeural"),
         media_render_tts_rate=_str("MEDIA_RENDER_TTS_RATE", "+8%"),

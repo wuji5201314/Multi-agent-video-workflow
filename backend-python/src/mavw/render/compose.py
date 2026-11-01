@@ -45,6 +45,49 @@ class ComposeOptions:
         )
 
 
+def subtitle_reserve(margin_v: int, font_size: int) -> int:
+    """底部要给字幕让出的高度：字幕底距 + 一行字高 + 呼吸间隙。
+
+    ASS 的 margin_v 是「字幕底边到画面底部」的距离，字幕本身还往上占大约
+    1.4 倍字高；少算这一段，右下角的画中画就会正好压住字幕上沿。
+    """
+
+    return margin_v + int(font_size * 1.4) + 16
+
+
+def pip_origin(
+    position: str,
+    canvas: tuple[int, int],
+    pip: tuple[int, int],
+    margin: int,
+    bottom_reserved: int,
+) -> tuple[int, int]:
+    """算画中画左上角坐标。
+
+    bottom_reserved 是底部要给字幕和标签条让出的高度；右下角摆放时从它往上算，
+    否则小窗会正好压在字幕上。
+    """
+
+    canvas_w, canvas_h = canvas
+    pip_w, pip_h = pip
+    side = (position or "top-right").strip().lower()
+
+    left = margin
+    right = canvas_w - pip_w - margin
+    # 顶部要给短视频平台的 UI 让位（约一个 margin 的高度），否则小窗会被点赞条压住。
+    top = margin * 2
+    bottom = canvas_h - pip_h - max(margin, bottom_reserved)
+
+    if side == "top-left":
+        return left, top
+    if side == "bottom-left":
+        return left, max(top, bottom)
+    if side == "bottom-right":
+        return max(left, right), max(top, bottom)
+    # 默认右上：最不容易和标题、字幕、标签条撞在一起。
+    return max(left, right), top
+
+
 class VideoComposer:
     """把一组素材片段和一条口播音轨合成为竖屏成品。"""
 
@@ -113,6 +156,55 @@ class VideoComposer:
             filters,
             output,
             extra=["-t", f"{seconds:.3f}"],
+        )
+
+    def compose_pip(
+        self,
+        base: Path,
+        avatar: Path,
+        mask: Path,
+        border: Path,
+        output: Path,
+        *,
+        x: int,
+        y: int,
+        duration_ms: int,
+        radius: int = 26,
+    ) -> None:
+        """把数字人小窗以圆角贴纸的形式叠到主画面上。
+
+        mask 是圆角灰度图（白=保留），border 是白描边环；两者都由
+        digital_human.rounded_mask_png / border_png 预先画好再传进来，
+        避免在 FFmpeg 里堆 geq 表达式。
+        """
+
+        seconds = max(duration_ms, 200) / 1000
+        filters = (
+            "[1:v]format=rgba[pip];"
+            "[2:v]format=gray[mask];"
+            "[pip][mask]alphamerge[pipa];"
+            f"[0:v][pipa]overlay={x}:{y}:eof_action=repeat[p1];"
+            "[3:v]format=rgba[brd];"
+            f"[p1][brd]overlay={x}:{y}:eof_action=repeat:format=auto,format=yuv420p[v]"
+        )
+        self._encode(
+            [
+                "-i",
+                str(base),
+                "-i",
+                str(avatar),
+                "-loop",
+                "1",
+                "-i",
+                str(mask),
+                "-loop",
+                "1",
+                "-i",
+                str(border),
+            ],
+            filters,
+            output,
+            extra=["-t", f"{seconds:.3f}", "-r", str(self._options.fps)],
         )
 
     def concat(self, clips: list[Path], output: Path) -> None:

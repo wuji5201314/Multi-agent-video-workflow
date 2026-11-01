@@ -63,6 +63,7 @@
           <div class="group-title">提示词</div>
           <textarea id="f-prompt" class="input-area" rows="4" placeholder="描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深"></textarea>
           <div class="hint"><span id="prompt-count">0</span> / 2000</div>
+          <div class="samples" id="f-samples"></div>
         </div>
 
         <div class="group">
@@ -81,13 +82,14 @@
           <div class="chips" id="f-style"></div>
         </div>
 
+        <div class="group">
+          <div class="group-title">张数</div>
+          <div class="segmented" id="f-count"></div>
+        </div>
+
         <details class="advanced" id="advanced">
           <summary>更多设置</summary>
           <div class="advanced-body">
-            <div class="group">
-              <div class="group-title">张数</div>
-              <div class="segmented" id="f-count"></div>
-            </div>
             <div class="group">
               <div class="group-title">质量</div>
               <div class="segmented" id="f-quality"></div>
