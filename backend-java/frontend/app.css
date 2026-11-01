@@ -157,9 +157,128 @@ button, input, textarea, select { font-family: inherit; }
 .view { display: none; min-height: 0; overflow: hidden; }
 .view.active { display: grid; }
 
+/* ---------------- 工具首页 ---------------- */
+
+#view-home { grid-template-columns: 1fr; }
+#view-home.active { display: block; }
+
+.home-scroll { height: 100%; overflow-y: auto; padding: 32px 34px 48px; }
+.home-scroll::-webkit-scrollbar { width: 9px; }
+.home-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); border-radius: 5px; }
+
+.home-head { max-width: 720px; margin-bottom: 22px; }
+
+.title-hero {
+  font-size: 34px; font-weight: 600; letter-spacing: -0.032em;
+  line-height: 1.12; margin-bottom: 8px;
+}
+
+.home-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
+
+.home-tab {
+  padding: 7px 15px; border: none; border-radius: 980px;
+  background: transparent; color: var(--text-2);
+  font-size: 13.5px; font-weight: 500; cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+.home-tab:hover { background: rgba(0, 0, 0, 0.045); color: var(--text); }
+.home-tab.active { background: var(--text); color: #fff; }
+
+.tool-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  max-width: 1240px;
+}
+
+.tool-card {
+  position: relative;
+  border-radius: var(--r-xl); background: var(--surface);
+  box-shadow: var(--shadow-sm); overflow: hidden;
+  cursor: pointer; text-align: left; border: none; padding: 0;
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  font-family: inherit;
+}
+.tool-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.tool-card.soon { cursor: default; }
+.tool-card.soon:hover { transform: none; box-shadow: var(--shadow-sm); }
+
+.tool-thumb {
+  height: 132px; position: relative;
+  display: grid; place-items: center;
+  color: rgba(255, 255, 255, 0.92);
+}
+.tool-thumb svg {
+  width: 42px; height: 42px; fill: none;
+  stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.16));
+}
+
+.g-blue   { background: linear-gradient(150deg, #6aa8ff, #2f6bff 60%, #1b46d6); }
+.g-pink   { background: linear-gradient(150deg, #ff9ec4, #ff6b9d 55%, #e0407b); }
+.g-cyan   { background: linear-gradient(150deg, #7fe0e8, #35b7d6 55%, #1f7fb8); }
+.g-green  { background: linear-gradient(150deg, #9be5a8, #34c759 55%, #1f9b52); }
+.g-orange { background: linear-gradient(150deg, #ffc06b, #ff9500 55%, #d97706); }
+.g-purple { background: linear-gradient(150deg, #b79cff, #8a5cf6 55%, #6633d9); }
+
+.tool-body { padding: 14px 17px 17px; }
+.tool-name { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+.tool-desc { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+.tool-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.tool-tag {
+  padding: 2px 8px; border-radius: 980px;
+  background: var(--fill); color: var(--text-3);
+  font-size: 10.5px; font-weight: 500;
+}
+
+.tool-soon {
+  position: absolute; top: 12px; right: 12px;
+  padding: 3px 9px; border-radius: 980px;
+  background: rgba(255, 255, 255, 0.22); color: #fff;
+  font-size: 10.5px; font-weight: 600;
+  backdrop-filter: blur(6px);
+}
+
+/* 返回入口 */
+
+.back-link {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin-bottom: 10px; padding: 4px 10px 4px 6px;
+  border: none; border-radius: 980px; background: transparent;
+  color: var(--blue); font-size: 12.5px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  transition: background 0.16s var(--ease);
+}
+.back-link:hover { background: var(--blue-soft); }
+.back-link svg {
+  width: 15px; height: 15px; fill: none;
+  stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* 折叠的高级设置 */
+
+.advanced { border-top: 1px solid var(--line); padding-top: 12px; margin-bottom: 18px; }
+
+.advanced > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  padding: 4px 0;
+}
+.advanced > summary::-webkit-details-marker { display: none; }
+.advanced > summary::after {
+  content: ""; width: 7px; height: 7px;
+  border-right: 1.6px solid var(--text-3); border-bottom: 1.6px solid var(--text-3);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.2s var(--ease);
+}
+.advanced[open] > summary::after { transform: rotate(-135deg) translateY(-2px); }
+
+.advanced-body { padding-top: 12px; }
+
 /* ---------------- 图片工作台 ---------------- */
 
-#view-images { grid-template-columns: 372px minmax(0, 1fr); }
+#view-studio { grid-template-columns: 372px minmax(0, 1fr); }
 
 .params {
   display: flex; flex-direction: column; min-height: 0;
@@ -167,7 +286,13 @@ button, input, textarea, select { font-family: inherit; }
   border-right: 1px solid var(--line);
 }
 
-.params-scroll { flex: 1; overflow-y: auto; padding: 20px 20px 8px; }
+.params-scroll {
+  flex: 1; overflow-y: auto; padding: 20px 20px 8px;
+  display: flex; flex-direction: column;
+}
+/* 参考图排在常规参数之后、更多设置之前 */
+.ref-group { order: 1; }
+.params-scroll > .advanced { order: 2; }
 .params-scroll::-webkit-scrollbar { width: 8px; }
 .params-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); border-radius: 4px; }
 .params-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -560,7 +685,8 @@ button, input, textarea, select { font-family: inherit; }
 
 @media (max-width: 1100px) {
   .workspace { grid-template-columns: 66px minmax(0, 1fr); }
-  #view-images { grid-template-columns: 320px minmax(0, 1fr); }
+  #view-studio { grid-template-columns: 320px minmax(0, 1fr); }
+  .home-scroll { padding: 26px 24px 40px; }
 }
 
 @media (max-width: 860px) {
@@ -572,7 +698,8 @@ button, input, textarea, select { font-family: inherit; }
   }
   .rail-spacer, .rail-note { display: none; }
   .rail-item { width: auto; flex-direction: row; gap: 7px; padding: 8px 14px; }
-  #view-images, #view-video { grid-template-columns: 1fr; }
+  #view-studio, #view-video { grid-template-columns: 1fr; }
+  .title-hero { font-size: 26px; }
   .params { border-right: none; border-bottom: 1px solid var(--line); }
   .canvas-head { padding: 18px 18px 12px; }
   .canvas-body { padding: 4px 18px 24px; }

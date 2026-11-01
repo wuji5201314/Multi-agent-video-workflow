@@ -25,7 +25,11 @@
 <div class="workspace">
 
   <nav class="rail" id="rail">
-    <button class="rail-item active" data-view="images">
+    <button class="rail-item active" data-view="home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>
+      <span>工具</span>
+    </button>
+    <button class="rail-item" data-view="studio">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 17l4.5-4.5 3 3 3-3L20 17"/></svg>
       <span>图片</span>
     </button>
@@ -34,11 +38,24 @@
       <span>视频</span>
     </button>
     <div class="rail-spacer"></div>
-    <div class="rail-note">v0.2</div>
+    <div class="rail-note">v0.3</div>
   </nav>
 
+  <!-- ============ 工具首页 ============ -->
+  <section class="view active" id="view-home">
+    <div class="home-scroll">
+      <div class="home-head">
+        <div class="eyebrow">工作台</div>
+        <div class="title-hero">选一个工具开始</div>
+        <div class="subtle">图片、视频、音频、文案，各自是独立的工作区，参数只显示当前要用的那些</div>
+      </div>
+      <div class="home-tabs" id="home-tabs"></div>
+      <div class="tool-grid" id="tool-grid"></div>
+    </div>
+  </section>
+
   <!-- ============ 图片工作台 ============ -->
-  <section class="view active" id="view-images">
+  <section class="view" id="view-studio">
     <aside class="params" id="params">
       <div class="params-scroll">
 
@@ -54,41 +71,43 @@
         </div>
 
         <div class="group">
-          <div class="group-title">画风</div>
-          <div class="chips" id="f-style"></div>
-        </div>
-
-        <div class="group">
           <div class="group-title">尺寸</div>
           <div class="chips" id="f-ratio"></div>
           <div class="size-hint" id="ratio-hint">768 × 1344</div>
         </div>
 
         <div class="group">
-          <div class="group-title">质量</div>
-          <div class="segmented" id="f-quality"></div>
+          <div class="group-title">画风</div>
+          <div class="chips" id="f-style"></div>
         </div>
 
-        <div class="group">
-          <div class="group-title">张数</div>
-          <div class="segmented" id="f-count"></div>
-        </div>
-
-        <div class="group">
-          <div class="group-title">模型</div>
-          <div class="segmented" id="f-model"></div>
-        </div>
-
-        <div class="group">
-          <div class="group-title">随机种子</div>
-          <div class="inline-row">
-            <input type="number" id="f-seed" class="input-text" value="0" min="0" step="1" />
-            <button class="btn btn-secondary btn-sm" id="btn-dice">随机</button>
+        <details class="advanced" id="advanced">
+          <summary>更多设置</summary>
+          <div class="advanced-body">
+            <div class="group">
+              <div class="group-title">张数</div>
+              <div class="segmented" id="f-count"></div>
+            </div>
+            <div class="group">
+              <div class="group-title">质量</div>
+              <div class="segmented" id="f-quality"></div>
+            </div>
+            <div class="group">
+              <div class="group-title">模型</div>
+              <div class="segmented" id="f-model"></div>
+            </div>
+            <div class="group">
+              <div class="group-title">随机种子</div>
+              <div class="inline-row">
+                <input type="number" id="f-seed" class="input-text" value="0" min="0" step="1" />
+                <button class="btn btn-secondary btn-sm" id="btn-dice">随机</button>
+              </div>
+              <div class="hint">0 表示每张都随机；固定值可复现同一张图</div>
+            </div>
           </div>
-          <div class="hint">0 表示每张都随机；固定值可复现同一张图</div>
-        </div>
+        </details>
 
-        <div class="group">
+        <div class="group ref-group" id="ref-group">
           <div class="group-title">参考图 <span class="group-optional">拖进来即可</span></div>
           <div class="dropzone" id="dropzone">
             <input type="file" id="f-file" accept="image/*" hidden />
@@ -116,7 +135,11 @@
     <div class="canvas">
       <div class="canvas-head">
         <div>
-          <div class="eyebrow">图片工作台</div>
+          <button class="back-link" id="btn-back">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+            全部工具
+          </button>
+          <div class="eyebrow" id="tool-eyebrow">图片工作台</div>
           <div class="title-lg" id="result-title">还没有生成结果</div>
         </div>
         <div class="segmented small" id="tab-images">

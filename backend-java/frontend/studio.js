@@ -10,6 +10,53 @@
 (function () {
   'use strict';
 
+  var TOOLS = [
+    {
+      id: 'image-generate', cat: 'image', name: '文生图',
+      desc: '写一句描述，选尺寸与画风，一次出 1–4 张',
+      tags: ['flux', '9:16', '批量'], grad: 'g-blue', ready: true,
+      icon: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 17l4.5-4.5 3 3 3-3L20 17"/>'
+    },
+    {
+      id: 'image-remix', cat: 'image', name: '参考图重绘',
+      desc: '拖一张图进来，先读成提示词，再按新风格重画',
+      tags: ['视觉理解', '重绘', '拖拽上传'], grad: 'g-pink', ready: true,
+      icon: '<rect x="2.5" y="4" width="12" height="10" rx="2.5"/><path d="M13 8.5h6.5a2 2 0 012 2v7a2 2 0 01-2 2H11"/><circle cx="6.5" cy="8" r="1.3"/>'
+    },
+    {
+      id: 'video-pipeline', cat: 'video', name: '智能成片',
+      desc: '选题 → 脚本 → 素材 → 成片 → 发布，每步都能回退重跑',
+      tags: ['TTS', 'ffmpeg', '竖屏'], grad: 'g-cyan', ready: true,
+      icon: '<rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3z"/>'
+    },
+    {
+      id: 'voice', cat: 'audio', name: '配音工坊',
+      desc: '文案转语音，多音色、语速与停顿控制',
+      tags: ['edge-tts'], grad: 'g-green', ready: false,
+      icon: '<path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/><path d="M6 11a6 6 0 0012 0M12 17v4"/>'
+    },
+    {
+      id: 'subtitle', cat: 'video', name: '字幕工坊',
+      desc: '自动断句、术语纠错，导出可编辑字幕轨',
+      tags: ['ASS', '词级时间轴'], grad: 'g-orange', ready: false,
+      icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4M7 10h10"/>'
+    },
+    {
+      id: 'copy', cat: 'text', name: '文案工坊',
+      desc: '选题、口播稿、标题与标签，一稿多平台改写',
+      tags: ['deepseek', '多平台'], grad: 'g-purple', ready: false,
+      icon: '<path d="M5 4h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M13 4v6h6"/>'
+    }
+  ];
+
+  var HOME_TABS = [
+    { key: 'all', label: '全部' },
+    { key: 'image', label: '图片' },
+    { key: 'video', label: '视频' },
+    { key: 'audio', label: '音频' },
+    { key: 'text', label: '文案' }
+  ];
+
   var options = { ratios: [], styles: [], qualities: [], models: [] };
   var state = {
     style: 'photo',
@@ -21,6 +68,8 @@
     reference: '',
     referenceNote: '',
     tab: 'results',
+    tool: 'image-generate',
+    homeTab: 'all',
     busy: false
   };
   var lastItems = [];
@@ -61,6 +110,71 @@
         return data;
       });
     });
+  }
+
+  /* ---------------- 工具首页 ---------------- */
+
+  function renderHome() {
+    var tabs = el('home-tabs');
+    if (!tabs) { return; }
+    tabs.innerHTML = HOME_TABS.map(function (item) {
+      var active = item.key === state.homeTab ? ' active' : '';
+      return '<button class="home-tab' + active + '" data-cat="' + esc(item.key) + '">' + esc(item.label) + '</button>';
+    }).join('');
+
+    var grid = el('tool-grid');
+    var list = TOOLS.filter(function (tool) {
+      return state.homeTab === 'all' || tool.cat === state.homeTab;
+    });
+    grid.innerHTML = list.map(function (tool) {
+      var soon = tool.ready ? '' : ' soon';
+      var badge = tool.ready ? '' : '<span class="tool-soon">即将上线</span>';
+      var tags = tool.tags.map(function (tag) {
+        return '<span class="tool-tag">' + esc(tag) + '</span>';
+      }).join('');
+      return '' +
+        '<button class="tool-card' + soon + '" data-tool="' + esc(tool.id) + '">' +
+          '<div class="tool-thumb ' + tool.grad + '">' +
+            badge +
+            '<svg viewBox="0 0 24 24">' + tool.icon + '</svg>' +
+          '</div>' +
+          '<div class="tool-body">' +
+            '<div class="tool-name">' + esc(tool.name) + '</div>' +
+            '<div class="tool-desc">' + esc(tool.desc) + '</div>' +
+            '<div class="tool-tags">' + tags + '</div>' +
+          '</div>' +
+        '</button>';
+    }).join('');
+  }
+
+  function openTool(toolId) {
+    var tool = TOOLS.filter(function (item) { return item.id === toolId; })[0];
+    if (!tool) { return; }
+    if (!tool.ready) {
+      toast(tool.name + ' 还在做，先试前三个');
+      return;
+    }
+    if (tool.id === 'video-pipeline') {
+      switchView('video');
+      return;
+    }
+    state.tool = tool.id;
+    applyTool(tool);
+    switchView('studio');
+  }
+
+  function applyTool(tool) {
+    el('tool-eyebrow').textContent = tool.name;
+    document.title = tool.name + ' · Multi-Agent Video Workflow';
+    var refGroup = el('ref-group');
+    var promptBox = el('f-prompt');
+    if (tool.id === 'image-remix') {
+      refGroup.hidden = false;
+      promptBox.placeholder = '想怎么改？例如：换成秋天傍晚的光线，保留人物与构图';
+    } else {
+      refGroup.hidden = true;
+      promptBox.placeholder = '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
+    }
   }
 
   /* ---------------- 参数面板 ---------------- */
@@ -440,20 +554,44 @@
 
   /* ---------------- 导航 ---------------- */
 
+  function switchView(view) {
+    ['home', 'studio', 'video'].forEach(function (name) {
+      var node = el('view-' + name);
+      if (node) { node.classList.toggle('active', name === view); }
+    });
+    var items = el('rail').querySelectorAll('[data-view]');
+    for (var i = 0; i < items.length; i += 1) {
+      items[i].classList.toggle('active', items[i].getAttribute('data-view') === view);
+    }
+    el('btn-new-video').hidden = view !== 'video';
+    if (view === 'video' && window.__videoBoot) { window.__videoBoot(); }
+    if (view === 'home') { renderHome(); }
+  }
+
   function bindNav() {
-    var rail = el('rail');
-    rail.addEventListener('click', function (event) {
+    el('rail').addEventListener('click', function (event) {
       var item = event.target.closest('[data-view]');
       if (!item) { return; }
       var view = item.getAttribute('data-view');
-      var items = rail.querySelectorAll('[data-view]');
-      for (var i = 0; i < items.length; i += 1) {
-        items[i].classList.toggle('active', items[i].getAttribute('data-view') === view);
+      if (view === 'studio') {
+        var tool = TOOLS.filter(function (t) { return t.id === state.tool; })[0] || TOOLS[0];
+        applyTool(tool);
       }
-      el('view-images').classList.toggle('active', view === 'images');
-      el('view-video').classList.toggle('active', view === 'video');
-      el('btn-new-video').hidden = view !== 'video';
-      if (view === 'video' && window.__videoBoot) { window.__videoBoot(); }
+      switchView(view);
+    });
+
+    el('btn-back').addEventListener('click', function () { switchView('home'); });
+
+    el('home-tabs').addEventListener('click', function (event) {
+      var tab = event.target.closest('[data-cat]');
+      if (!tab) { return; }
+      state.homeTab = tab.getAttribute('data-cat');
+      renderHome();
+    });
+
+    el('tool-grid').addEventListener('click', function (event) {
+      var card = event.target.closest('[data-tool]');
+      if (card) { openTool(card.getAttribute('data-tool')); }
     });
   }
 
@@ -475,12 +613,14 @@
     el('f-prompt').addEventListener('keydown', function (event) {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { generate(); }
     });
+    renderHome();
     loadOptions();
     loadHistory();
-    // 支持 ?tab=history 直接打开历史，方便分享与截图
     try {
       var params = new URLSearchParams(window.location.search);
-      if (params.get('tab') === 'history') { setTab('history'); }
+      var wantTool = params.get('tool');
+      if (wantTool) { openTool(wantTool); }
+      if (params.get('tab') === 'history') { switchView('studio'); setTab('history'); }
     } catch (err) { /* 老浏览器忽略 */ }
   }
 
