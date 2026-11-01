@@ -82,7 +82,7 @@ POST /ai/content-generation/topics/previews/render
 
 ## 已验证
 
-- `scripts/demo.py --brief "AI剪辑入门" --auto`：5 步全绿，产出 1080x1920 / 30fps / h264 + aac / 32.49s / 约 2.1MB 的成片；
+- `scripts/demo.py --brief "AI剪辑入门" --auto`：5 步全绿，产出 1080x1920 / 30fps / h264 + aac / 28.41s 的成片，镜间静音 0 处 ≥0.5s；
 - `scripts/smoke_gates.py`：选题确认、脚本打回重跑、改稿保留、进程重启续跑、下游失效重置，6 条断言全通过；
 - 坐标自测：抽取第 8 秒画面确认「卡片标题 + 底部标签 + 字幕」三层不重叠。
 
@@ -102,6 +102,24 @@ reference/mpt/         渲染层原始参考实现（voice/video/subtitle/bgm/ma
 sql/schema.sql         管线库可读快照
 docs/ARCHITECTURE.md   融合映射与扩展点
 ```
+
+## 在这台机器上提交（Git 补丁说明）
+
+本机 `D:\Git\Git` 只带了 `git-remote-ftp`，缺 `git-remote-http/https`，任何 `git clone/push` 都会报
+`git: 'remote-https' is not a git command`。winget 升级失败是因为 DSH 自身的 bash.exe 正占用该目录。
+
+绕过方式：用便携版 MinGit 2.56 + 一个包装脚本。
+
+```powershell
+# 已就绪：D:\AGI\tools\MinGit（2.56.0.4）+ D:\AGI\tools\git-gh.cmd
+# 以后在这个仓库里，把 git 换成 git-gh 即可
+cmd /c "D:\AGI\tools\git-gh.cmd" status
+cmd /c "D:\AGI\tools\git-gh.cmd" push origin main:feat/yanque-media-fusion
+```
+
+包装脚本里有三件必须的事：`GIT_SSL_CAINFO` 指向 MinGit 自带证书（否则报
+`error adding trust anchors from C:/Program Files/Git/.../ca-bundle.crt`）、`GIT_EXEC_PATH` 指向
+ucrt64 的 git-core、以及调用 `D:\AGI\tools\MinGit\cmd\git.exe`。
 
 ## 边界
 
