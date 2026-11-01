@@ -33,76 +33,86 @@
     return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24">' + body + '</svg>';
   }
 
+  /* 图标配色：浅色底 + 饱和色图标，克制地给每类一点色彩提示 */
+  var TONES = {
+    blue: ['rgba(0, 113, 227, 0.12)', '#0071e3'],
+    purple: ['rgba(175, 82, 222, 0.12)', '#af52de'],
+    green: ['rgba(52, 199, 89, 0.14)', '#248a3d'],
+    orange: ['rgba(255, 149, 0, 0.14)', '#b26a00'],
+    pink: ['rgba(255, 45, 85, 0.12)', '#d61b47'],
+    grey: ['rgba(0, 0, 0, 0.055)', '#86868b']
+  };
+
   /* ---------------- 工具与分类 ---------------- */
 
   var TOOLS = {
     'image-generate': {
-      name: '文生图', sub: '基础出图', icon: 'image', ready: true, mode: 'generate',
+      name: '文生图', sub: '基础出图', icon: 'image', ready: true, mode: 'generate', tone: 'blue',
       desc: '写一句描述生成图片，可调尺寸、画风、质量与张数。',
       tags: ['已接通', 'flux']
     },
     'image-remix': {
-      name: '参考图重绘', sub: '图生图', icon: 'remix', ready: true, mode: 'remix',
+      name: '参考图重绘', sub: '图生图', icon: 'remix', ready: true, mode: 'remix', tone: 'purple',
       desc: '上传一张图，先读成提示词，再按新风格重新画出来。',
       tags: ['已接通', 'vision']
     },
     'video-pipeline': {
-      name: '智能成片', sub: '新手入口', icon: 'video', ready: true, mode: 'video',
+      name: '智能成片', sub: '新手入口', icon: 'video', ready: true, mode: 'video', tone: 'green',
       desc: '选题、脚本、素材、成片、发布五步走，每个环节都能回退重做。',
       tags: ['已接通', 'TTS + ffmpeg']
     },
     'video-text': {
-      name: '文字成片', sub: '5 步向导', icon: 'video', ready: false,
+      name: '文字成片', sub: '5 步向导', icon: 'video', ready: false, tone: 'blue',
       desc: '给一段文案，自动配音、配图、卡点，直接出竖屏成片。',
       tags: ['即将上线', '建议 15 秒起']
     },
     'video-image': {
-      name: '图生视频', sub: '首帧驱动', icon: 'frame', ready: false,
+      name: '图生视频', sub: '首帧驱动', icon: 'frame', ready: false, tone: 'blue',
       desc: '首帧图加运动描述，生成一段带镜头运动的短片。',
       tags: ['即将上线', '最低 5 秒']
     },
     'video-firstlast': {
-      name: '首尾帧过渡', sub: 'HL', icon: 'frame', ready: false,
+      name: '首尾帧过渡', sub: 'HL', icon: 'frame', ready: false, tone: 'blue',
       desc: '给首帧与尾帧，自动补出中间过渡，适合转场与变身。',
       tags: ['即将上线']
     },
     'cover': {
-      name: '平台封面', sub: '新手入口', icon: 'cover', ready: false,
+      name: '平台封面', sub: '新手入口', icon: 'cover', ready: false, tone: 'orange',
       desc: '一张参考图加一个主题，生成小红书、抖音或快手封面。',
       tags: ['即将上线', '默认 9:16']
     },
     'edit-clip': {
-      name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false,
+      name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false, tone: 'blue',
       desc: '导入长素材，按脚本自动切段、配字幕、卡点成片。',
       tags: ['即将上线']
     },
     'edit-upscale': {
-      name: '视频高清放大', sub: '2–4 倍', icon: 'upscale', ready: false,
+      name: '视频高清放大', sub: '2–4 倍', icon: 'upscale', ready: false, tone: 'purple',
       desc: '低清素材放大到 1080p 或 4K，保留细节。',
       tags: ['即将上线']
     },
     'voice-tts': {
-      name: '配音工坊', sub: '多音色', icon: 'voice', ready: false,
+      name: '配音工坊', sub: '多音色', icon: 'voice', ready: false, tone: 'orange',
       desc: '文案转语音，可选音色、语速与停顿。',
       tags: ['即将上线', 'edge-tts']
     },
     'voice-clone': {
-      name: '声音克隆', sub: '样音 10 秒', icon: 'clone', ready: false,
+      name: '声音克隆', sub: '样音 10 秒', icon: 'clone', ready: false, tone: 'orange',
       desc: '给一段样音，复刻音色并用它读任意文案。',
       tags: ['即将上线']
     },
     'subtitle': {
-      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: false,
+      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: false, tone: 'green',
       desc: '识别语音、自动断句、烧录成片。',
       tags: ['即将上线', 'ASS']
     },
     'copy-detail': {
-      name: '详情页文案', sub: '成交型', icon: 'copy', ready: false,
+      name: '详情页文案', sub: '成交型', icon: 'copy', ready: false, tone: 'purple',
       desc: '按产品卖点写详情页文案与分镜脚本。',
       tags: ['即将上线']
     },
     'copy-rewrite': {
-      name: '文案仿写', sub: '去重改写', icon: 'copy', ready: false,
+      name: '文案仿写', sub: '去重改写', icon: 'copy', ready: false, tone: 'purple',
       desc: '给一段参考文案，改写成自己的口吻。',
       tags: ['即将上线']
     }
@@ -237,10 +247,13 @@
       var kind = tag === '已接通' ? ' hot' : (tag === '即将上线' ? '' : ' new');
       return '<span class="card-tag' + kind + '">' + esc(tag) + '</span>';
     }).join('');
+    var tone = ready ? (tool.tone || 'blue') : 'grey';
+    var bg = TONES[tone][0];
+    var fg = TONES[tone][1];
     return '' +
       '<button class="' + cls + '" data-tool="' + esc(toolKey) + '">' +
         '<div class="card-top">' +
-          '<span class="card-clock">' + icon(tool.icon) + '</span>' +
+          '<span class="card-clock" style="--icon-bg:' + bg + ';--icon-fg:' + fg + '">' + icon(tool.icon) + '</span>' +
           '<span class="card-title">' + esc(tool.name) + '</span>' +
           '<span class="card-arrow">↗</span>' +
         '</div>' +
