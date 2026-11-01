@@ -1,87 +1,189 @@
-/* 图片工作台：参数面板 + 生成 + 历史画廊。
-   与后端约定：
-   GET  /api/images/options          预设（比例/画风/质量/模型）
-   POST /api/images/generate         生成
-   POST /api/images/upload           原始二进制上传参考图
-   POST /api/images/analyze          参考图 → 提示词
-   GET  /api/images/history          历史
-   DELETE /api/images/{id}           删除
+/* 工作台前端：分类页（面包屑/标题/提示/分组卡片）+ 图片工具工作区。
+   后端约定：
+   GET  /api/images/options   预设
+   POST /api/images/generate  生成
+   POST /api/images/upload    原始二进制上传参考图
+   POST /api/images/analyze   参考图 → 提示词
+   GET  /api/images/history   历史
+   DELETE /api/images/{id}    删除
 */
 (function () {
   'use strict';
 
-  var TOOLS = [
-    {
-      id: 'image-generate', cat: 'image', name: '文生图',
-      desc: '写一句描述，选尺寸与画风，一次出 1–4 张',
-      tags: ['flux', '9:16', '批量'], grad: 'g-blue', ready: true,
-      samples: [
-        '清晨书桌上一杯手冲咖啡与摊开的笔记本，暖光斜照，浅景深',
-        '雨夜的霓虹街道，积水倒映招牌，电影感',
-        '极简白底上的一个陶瓷花瓶，柔和阴影，产品摄影',
-        '未来城市天际线，黄昏，广角'
-      ],
-      icon: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 17l4.5-4.5 3 3 3-3L20 17"/>'
-    },
-    {
-      id: 'image-remix', cat: 'image', name: '参考图重绘',
-      desc: '拖一张图进来，先读成提示词，再按新风格重画',
-      tags: ['视觉理解', '重绘', '拖拽上传'], grad: 'g-pink', ready: true,
-      samples: [
-        '换成秋天傍晚的光线，保留人物与构图',
-        '改成水彩画风格，纸张纹理',
-        '加一层胶片颗粒与轻微暗角',
-        '把背景换成海边，主体不变'
-      ],
-      icon: '<rect x="2.5" y="4" width="12" height="10" rx="2.5"/><path d="M13 8.5h6.5a2 2 0 012 2v7a2 2 0 01-2 2H11"/><circle cx="6.5" cy="8" r="1.3"/>'
-    },
-    {
-      id: 'video-pipeline', cat: 'video', name: '智能成片',
-      desc: '选题 → 脚本 → 素材 → 成片 → 发布，每步都能回退重跑',
-      tags: ['TTS', 'ffmpeg', '竖屏'], grad: 'g-cyan', ready: true,
-      icon: '<rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3z"/>'
-    },
-    {
-      id: 'voice', cat: 'audio', name: '配音工坊',
-      desc: '文案转语音，多音色、语速与停顿控制',
-      tags: ['edge-tts'], grad: 'g-green', ready: false,
-      icon: '<path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/><path d="M6 11a6 6 0 0012 0M12 17v4"/>'
-    },
-    {
-      id: 'subtitle', cat: 'video', name: '字幕工坊',
-      desc: '自动断句、术语纠错，导出可编辑字幕轨',
-      tags: ['ASS', '词级时间轴'], grad: 'g-orange', ready: false,
-      icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4M7 10h10"/>'
-    },
-    {
-      id: 'copy', cat: 'text', name: '文案工坊',
-      desc: '选题、口播稿、标题与标签，一稿多平台改写',
-      tags: ['deepseek', '多平台'], grad: 'g-purple', ready: false,
-      icon: '<path d="M5 4h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M13 4v6h6"/>'
-    }
-  ];
+  /* ---------------- 图标 ---------------- */
 
-  var HOME_TABS = [
-    { key: 'all', label: '全部' },
-    { key: 'image', label: '图片' },
-    { key: 'video', label: '视频' },
-    { key: 'audio', label: '音频' },
-    { key: 'text', label: '文案' }
-  ];
+  var ICONS = {
+    image: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M4 17l4.5-4.5 3 3 3-3L20 17"/>',
+    remix: '<path d="M4 8h9l-2.5-2.5M20 16h-9l2.5 2.5"/><circle cx="18" cy="8" r="2.4"/><circle cx="6" cy="16" r="2.4"/>',
+    video: '<rect x="3" y="5" width="13" height="14" rx="3"/><path d="M16 10l5-3v10l-5-3z"/>',
+    cover: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/>',
+    voice: '<path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/><path d="M6 11a6 6 0 0012 0M12 17v4"/>',
+    subtitle: '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4"/>',
+    copy: '<path d="M5 4h9l5 5v11a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"/><path d="M13 4v6h6"/>',
+    edit: '<path d="M4 7h10M4 12h16M4 17h7"/><circle cx="17" cy="7" r="2"/><circle cx="13" cy="17" r="2"/>',
+    upscale: '<path d="M4 14v4a2 2 0 002 2h4M20 10V6a2 2 0 00-2-2h-4"/><path d="M9 15l6-6"/>',
+    clone: '<circle cx="9" cy="9" r="3"/><path d="M4 19a5 5 0 0110 0"/><path d="M16 8a3 3 0 010 6"/><path d="M18 19a5 5 0 00-3-4.6"/>',
+    script: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    frame: '<rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/>'
+  };
+
+  function icon(name, size) {
+    var body = ICONS[name] || ICONS.image;
+    var s = size || 11;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24">' + body + '</svg>';
+  }
+
+  /* ---------------- 工具与分类 ---------------- */
+
+  var TOOLS = {
+    'image-generate': {
+      name: '文生图', sub: '基础出图', icon: 'image', ready: true, mode: 'generate',
+      desc: '写一句描述生成图片，可调尺寸、画风、质量与张数。',
+      tags: ['已接通', 'flux']
+    },
+    'image-remix': {
+      name: '参考图重绘', sub: '图生图', icon: 'remix', ready: true, mode: 'remix',
+      desc: '上传一张图，先读成提示词，再按新风格重新画出来。',
+      tags: ['已接通', 'vision']
+    },
+    'video-pipeline': {
+      name: '智能成片', sub: '新手入口', icon: 'video', ready: true, mode: 'video',
+      desc: '选题、脚本、素材、成片、发布五步走，每个环节都能回退重做。',
+      tags: ['已接通', 'TTS + ffmpeg']
+    },
+    'video-text': {
+      name: '文字成片', sub: '5 步向导', icon: 'video', ready: false,
+      desc: '给一段文案，自动配音、配图、卡点，直接出竖屏成片。',
+      tags: ['即将上线', '建议 15 秒起']
+    },
+    'video-image': {
+      name: '图生视频', sub: '首帧驱动', icon: 'frame', ready: false,
+      desc: '首帧图加运动描述，生成一段带镜头运动的短片。',
+      tags: ['即将上线', '最低 5 秒']
+    },
+    'video-firstlast': {
+      name: '首尾帧过渡', sub: 'HL', icon: 'frame', ready: false,
+      desc: '给首帧与尾帧，自动补出中间过渡，适合转场与变身。',
+      tags: ['即将上线']
+    },
+    'cover': {
+      name: '平台封面', sub: '新手入口', icon: 'cover', ready: false,
+      desc: '一张参考图加一个主题，生成小红书、抖音或快手封面。',
+      tags: ['即将上线', '默认 9:16']
+    },
+    'edit-clip': {
+      name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false,
+      desc: '导入长素材，按脚本自动切段、配字幕、卡点成片。',
+      tags: ['即将上线']
+    },
+    'edit-upscale': {
+      name: '视频高清放大', sub: '2–4 倍', icon: 'upscale', ready: false,
+      desc: '低清素材放大到 1080p 或 4K，保留细节。',
+      tags: ['即将上线']
+    },
+    'voice-tts': {
+      name: '配音工坊', sub: '多音色', icon: 'voice', ready: false,
+      desc: '文案转语音，可选音色、语速与停顿。',
+      tags: ['即将上线', 'edge-tts']
+    },
+    'voice-clone': {
+      name: '声音克隆', sub: '样音 10 秒', icon: 'clone', ready: false,
+      desc: '给一段样音，复刻音色并用它读任意文案。',
+      tags: ['即将上线']
+    },
+    'subtitle': {
+      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: false,
+      desc: '识别语音、自动断句、烧录成片。',
+      tags: ['即将上线', 'ASS']
+    },
+    'copy-detail': {
+      name: '详情页文案', sub: '成交型', icon: 'copy', ready: false,
+      desc: '按产品卖点写详情页文案与分镜脚本。',
+      tags: ['即将上线']
+    },
+    'copy-rewrite': {
+      name: '文案仿写', sub: '去重改写', icon: 'copy', ready: false,
+      desc: '给一段参考文案，改写成自己的口吻。',
+      tags: ['即将上线']
+    }
+  };
+
+  var CATS = {
+    home: {
+      crumb: ['全部分类'],
+      title: '首页',
+      desc: '已经接通的功能排在前面，其余功能陆续开放。',
+      notice: '生成结果都会进「历史记录」，图片可直接下载。',
+      groups: [
+        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'image-remix', 'video-pipeline'] },
+        { name: '即将上线', accent: '#66666f', tools: ['cover', 'voice-tts', 'subtitle', 'copy-detail'] }
+      ]
+    },
+    image: {
+      crumb: ['全部分类', '图片创作'],
+      title: '图片创作',
+      desc: '从文字或参考图出发，生成可直接使用的图片与封面。',
+      notice: '图片按张计费，一次最多 4 张；固定随机种子可复现同一张。',
+      groups: [
+        { name: '生成', accent: '#0a84ff', tools: ['image-generate'] },
+        { name: '编辑与重绘', accent: '#bf5af2', tools: ['image-remix'] },
+        { name: '封面与投放', accent: '#ff9f0a', tools: ['cover'] }
+      ]
+    },
+    video: {
+      crumb: ['全部分类', '视频生成'],
+      title: '视频生成',
+      desc: '用文字、图片或首尾帧生成竖屏成片，支持多步骤回退。',
+      notice: '默认输出 1080×1920 竖屏；配音与字幕在成片时一起合成。',
+      groups: [
+        { name: '文字与图片生成', accent: '#30d158', tools: ['video-pipeline', 'video-text', 'video-image'] },
+        { name: '首尾帧过渡', accent: '#0a84ff', tools: ['video-firstlast'] }
+      ]
+    },
+    edit: {
+      crumb: ['全部分类', '视频编辑'],
+      title: '视频编辑',
+      desc: '对已有素材做剪辑、放大与替换，不重新生成画面。',
+      notice: '上传前请确认素材格式为 mp4 / mov，单个文件建议不超过 500MB。',
+      groups: [
+        { name: '剪辑', accent: '#5ac8fa', tools: ['edit-clip'] },
+        { name: '画质', accent: '#bf5af2', tools: ['edit-upscale'] }
+      ]
+    },
+    audio: {
+      crumb: ['全部分类', '声音工具'],
+      title: '声音工具',
+      desc: '把文案变成可用的配音，或复刻一个音色。',
+      notice: '配音按字数计费；克隆音色需要至少 10 秒清晰样音。',
+      groups: [
+        { name: '配音', accent: '#ff9f0a', tools: ['voice-tts', 'voice-clone'] },
+        { name: '字幕', accent: '#30d158', tools: ['subtitle'] }
+      ]
+    },
+    text: {
+      crumb: ['全部分类', '文案工具'],
+      title: '文案工具',
+      desc: '从选题到口播稿，都在这一个分类里完成。',
+      notice: '文案生成会调用大模型，长文建议分段处理。',
+      groups: [
+        { name: '成交与口播', accent: '#bf5af2', tools: ['copy-detail', 'copy-rewrite'] }
+      ]
+    }
+  };
+
+  /* ---------------- 状态 ---------------- */
 
   var options = { ratios: [], styles: [], qualities: [], models: [] };
   var state = {
+    cat: 'home',
+    tool: 'image-generate',
     style: 'photo',
     ratio: '9:16',
     quality: 'standard',
     count: 1,
     model: 'klein',
-    seed: 0,
     reference: '',
-    referenceNote: '',
     tab: 'results',
-    tool: 'image-generate',
-    homeTab: 'all',
     busy: false
   };
   var lastItems = [];
@@ -101,7 +203,7 @@
     node.textContent = message;
     node.className = 'toast show' + (isError ? ' error' : '');
     if (toastTimer) { clearTimeout(toastTimer); }
-    toastTimer = setTimeout(function () { node.className = 'toast'; }, isError ? 5200 : 2600);
+    toastTimer = setTimeout(function () { node.className = 'toast'; }, isError ? 5200 : 2400);
   }
 
   function api(path, init) {
@@ -124,90 +226,134 @@
     });
   }
 
-  /* ---------------- 工具首页 ---------------- */
+  /* ---------------- 分类页渲染 ---------------- */
 
-  function renderHome() {
-    var tabs = el('home-tabs');
-    if (!tabs) { return; }
-    tabs.innerHTML = HOME_TABS.map(function (item) {
-      var active = item.key === state.homeTab ? ' active' : '';
-      return '<button class="home-tab' + active + '" data-cat="' + esc(item.key) + '">' + esc(item.label) + '</button>';
+  function cardHtml(toolKey) {
+    var tool = TOOLS[toolKey];
+    if (!tool) { return ''; }
+    var ready = tool.ready;
+    var cls = 'tool-card' + (ready ? '' : ' soon');
+    var tags = tool.tags.map(function (tag) {
+      var kind = tag === '已接通' ? ' hot' : (tag === '即将上线' ? '' : ' new');
+      return '<span class="card-tag' + kind + '">' + esc(tag) + '</span>';
     }).join('');
-
-    var grid = el('tool-grid');
-    var list = TOOLS.filter(function (tool) {
-      return state.homeTab === 'all' || tool.cat === state.homeTab;
-    });
-    grid.innerHTML = list.map(function (tool) {
-      var soon = tool.ready ? '' : ' soon';
-      var badge = tool.ready ? '' : '<span class="tool-soon">即将上线</span>';
-      var tags = tool.tags.map(function (tag) {
-        return '<span class="tool-tag">' + esc(tag) + '</span>';
-      }).join('');
-      return '' +
-        '<button class="tool-card' + soon + '" data-tool="' + esc(tool.id) + '">' +
-          '<div class="tool-thumb ' + tool.grad + '">' +
-            badge +
-            '<svg viewBox="0 0 24 24">' + tool.icon + '</svg>' +
-          '</div>' +
-          '<div class="tool-body">' +
-            '<div class="tool-name">' + esc(tool.name) + '</div>' +
-            '<div class="tool-desc">' + esc(tool.desc) + '</div>' +
-            '<div class="tool-tags">' + tags + '</div>' +
-          '</div>' +
-        '</button>';
-    }).join('');
+    return '' +
+      '<button class="' + cls + '" data-tool="' + esc(toolKey) + '">' +
+        '<div class="card-top">' +
+          '<span class="card-clock">' + icon(tool.icon) + '</span>' +
+          '<span class="card-title">' + esc(tool.name) + '</span>' +
+          '<span class="card-arrow">↗</span>' +
+        '</div>' +
+        (tool.sub ? '<div class="card-sub">' + esc(tool.sub) + '</div>' : '') +
+        '<div class="card-desc">' + esc(tool.desc) + '</div>' +
+        '<div class="card-tags">' + tags + '</div>' +
+      '</button>';
   }
 
-  function openTool(toolId) {
-    var tool = TOOLS.filter(function (item) { return item.id === toolId; })[0];
+  function renderCategory(catKey) {
+    var cat = CATS[catKey] || CATS.home;
+    state.cat = catKey;
+
+    // 面包屑
+    el('crumb').innerHTML = cat.crumb.map(function (item, index) {
+      var last = index === cat.crumb.length - 1;
+      var node = last
+        ? '<span class="now">' + esc(item) + '</span>'
+        : '<button data-cat-jump="' + (index === 0 ? 'home' : catKey) + '">' + esc(item) + '</button>';
+      return (index ? '<span class="sep">/</span>' : '') + node;
+    }).join('');
+
+    el('page-title').textContent = cat.title;
+    el('page-desc').textContent = cat.desc;
+
+    var total = cat.groups.reduce(function (sum, group) { return sum + group.tools.length; }, 0);
+    el('page-count').textContent = total + ' 个功能';
+
+    el('page-notice').innerHTML = '<span>·</span><span>' + esc(cat.notice) + '</span>';
+
+    el('group-list').innerHTML = cat.groups.map(function (group) {
+      return '' +
+        '<div class="group-block">' +
+          '<div class="group-head" style="--accent:' + esc(group.accent) + '">' + esc(group.name) + '</div>' +
+          '<div class="card-grid">' + group.tools.map(cardHtml).join('') + '</div>' +
+        '</div>';
+    }).join('');
+
+    // 侧栏高亮
+    var items = document.querySelectorAll('.rail-item[data-cat]');
+    for (var i = 0; i < items.length; i += 1) {
+      items[i].classList.toggle('active', items[i].getAttribute('data-cat') === catKey);
+    }
+  }
+
+  /* ---------------- 视图切换 ---------------- */
+
+  function switchView(name) {
+    el('view-home').classList.toggle('active', name === 'home');
+    el('view-studio').classList.toggle('active', name === 'studio');
+    el('view-video').classList.toggle('active', name === 'video');
+    el('btn-new-video').hidden = name !== 'video';
+  }
+
+  // 工具归属哪个分类（用于侧栏高亮与返回时的落点）
+  // home 是聚合页，只有别的分类都不认领时才回退到它
+  function catOfTool(toolKey) {
+    var key;
+    var groups;
+    var i;
+    for (key in CATS) {
+      if (!Object.prototype.hasOwnProperty.call(CATS, key) || key === 'home') { continue; }
+      groups = CATS[key].groups;
+      for (i = 0; i < groups.length; i += 1) {
+        if (groups[i].tools.indexOf(toolKey) >= 0) { return key; }
+      }
+    }
+    return 'home';
+  }
+
+  function highlightRail(catKey) {
+    var items = document.querySelectorAll('.rail-item[data-cat]');
+    for (var i = 0; i < items.length; i += 1) {
+      items[i].classList.toggle('active', items[i].getAttribute('data-cat') === catKey);
+    }
+  }
+
+  function openTool(toolKey) {
+    var tool = TOOLS[toolKey];
     if (!tool) { return; }
     if (!tool.ready) {
-      toast(tool.name + ' 还在做，先试前三个');
+      toast(tool.name + ' 还没接通，先用已上线的功能');
       return;
     }
-    if (tool.id === 'video-pipeline') {
+    state.cat = catOfTool(toolKey);
+    highlightRail(state.cat);
+    if (tool.mode === 'video') {
       switchView('video');
+      if (window.__videoBoot) { window.__videoBoot(); }
       return;
     }
-    state.tool = tool.id;
-    applyTool(tool);
-    switchView('studio');
-  }
-
-  function applyTool(tool) {
+    state.tool = toolKey;
+    el('panel-title').textContent = tool.name;
+    el('panel-desc').textContent = tool.desc;
     el('tool-eyebrow').textContent = tool.name;
-    document.title = tool.name + ' · Multi-Agent Video Workflow';
-    var refGroup = el('ref-group');
-    var promptBox = el('f-prompt');
-    if (tool.id === 'image-remix') {
-      refGroup.hidden = false;
-      promptBox.placeholder = '想怎么改？例如：换成秋天傍晚的光线，保留人物与构图';
-    } else {
-      refGroup.hidden = true;
-      promptBox.placeholder = '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
-    }
-
-    var box = el('f-samples');
-    if (box) {
-      var samples = tool.samples || [];
-      box.innerHTML = samples.map(function (text) {
-        return '<button class="sample-chip" data-sample="' + esc(text) + '">' + esc(text) + '</button>';
-      }).join('');
-      box.hidden = samples.length === 0;
-      box.onclick = function (event) {
-        var chip = event.target.closest('[data-sample]');
-        if (!chip) { return; }
-        promptBox.value = chip.getAttribute('data-sample');
-        updatePromptCount();
-        promptBox.focus();
-      };
-    }
+    var isRemix = tool.mode === 'remix';
+    el('ref-group').hidden = !isRemix;
+    el('f-prompt').placeholder = isRemix
+      ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
+      : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
+    el('btn-generate').textContent = isRemix ? '重绘图片' : '生成图片';
+    renderSamples(isRemix);
+    switchView('studio');
   }
 
   /* ---------------- 参数面板 ---------------- */
 
-  // getActive 每次重新取值，避免把"当前选中项"缓存进闭包导致高亮不更新
+  function getStyle() { return state.style; }
+  function getRatio() { return state.ratio; }
+  function getQuality() { return state.quality; }
+  function getCount() { return String(state.count); }
+  function getModel() { return state.model; }
+
   function renderChips(containerId, items, getActive, onPick) {
     var box = el(containerId);
     if (!box) { return; }
@@ -240,15 +386,7 @@
     };
   }
 
-  function getStyle() { return state.style; }
-  function getRatio() { return state.ratio; }
-  function getQuality() { return state.quality; }
-  function getCount() { return String(state.count); }
-  function getModel() { return state.model; }
-
   function paintControls() {
-    renderChips('f-style', options.styles, getStyle, function (key) { state.style = key; });
-
     renderChips('f-ratio', options.ratios.map(function (r) {
       return { key: r.key, label: r.label };
     }), getRatio, function (key) {
@@ -257,25 +395,44 @@
       if (found) { el('ratio-hint').textContent = found.width + ' × ' + found.height; }
     });
 
-    renderSegmented('f-quality', options.qualities, getQuality, function (key) { state.quality = key; });
+    renderChips('f-style', options.styles, getStyle, function (key) { state.style = key; });
 
     renderSegmented('f-count', [
       { key: '1', label: '1 张' }, { key: '2', label: '2 张' },
       { key: '3', label: '3 张' }, { key: '4', label: '4 张' }
     ], getCount, function (key) { state.count = Number(key); });
 
+    renderSegmented('f-quality', options.qualities, getQuality, function (key) { state.quality = key; });
     renderSegmented('f-model', options.models, getModel, function (key) { state.model = key; });
+  }
+
+  var SAMPLES = {
+    generate: [
+      '清晨书桌上摊开的笔记本、一杯冒热气的咖啡，暖光侧照，浅景深',
+      '深夜便利店的玻璃窗，雨滴与霓虹反光，电影感冷色调',
+      '毛线质感的小熊坐在窗台，柔光，浅色背景，适合做头像'
+    ],
+    remix: [
+      '换成秋天傍晚的氛围，暖黄逆光，保留人物姿态与构图',
+      '改成水彩插画风格，纸纹质感，颜色更克制',
+      '改成黑白胶片质感，高对比，颗粒明显'
+    ]
+  };
+
+  function renderSamples(isRemix) {
+    var list = SAMPLES[isRemix ? 'remix' : 'generate'];
+    el('f-samples').innerHTML = list.map(function (text) {
+      return '<button class="sample-chip" data-sample="' + esc(text) + '">' + esc(text) + '</button>';
+    }).join('');
   }
 
   function loadOptions() {
     return api('/api/images/options').then(function (data) {
       options = data;
-      if (!data.has_image_key) {
-        toast('没有配置 IMAGE_API_KEY，出图会失败', true);
-      }
       paintControls();
       var first = options.ratios.filter(function (r) { return r.key === '9:16'; })[0] || options.ratios[0];
       if (first) { el('ratio-hint').textContent = first.width + ' × ' + first.height; }
+      if (!data.has_image_key) { toast('没有配置 IMAGE_API_KEY，出图会失败', true); }
       return data;
     }).catch(function (err) {
       toast('读取预设失败：' + err.message, true);
@@ -312,7 +469,6 @@
       if (file) { uploadReference(file); }
     });
 
-    // 整页也接受拖入，避免用户拖偏
     document.addEventListener('dragover', function (event) { event.preventDefault(); });
     document.addEventListener('drop', function (event) {
       var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
@@ -327,14 +483,8 @@
   }
 
   function uploadReference(file) {
-    if (!/^image\//.test(file.type)) {
-      toast('只支持图片文件', true);
-      return;
-    }
-    if (file.size > 20 * 1024 * 1024) {
-      toast('图片超过 20MB', true);
-      return;
-    }
+    if (!/^image\//.test(file.type)) { toast('只支持图片文件', true); return; }
+    if (file.size > 20 * 1024 * 1024) { toast('图片超过 20MB', true); return; }
     el('gen-status').textContent = '正在上传参考图…';
     fetch('/api/images/upload', {
       method: 'POST',
@@ -347,7 +497,6 @@
       })
       .then(function (data) {
         state.reference = data.file;
-        state.referenceNote = '';
         var preview = el('ref-preview');
         preview.src = data.url + '?t=' + Date.now();
         preview.hidden = false;
@@ -364,7 +513,6 @@
 
   function clearReference() {
     state.reference = '';
-    state.referenceNote = '';
     var preview = el('ref-preview');
     preview.hidden = true;
     preview.removeAttribute('src');
@@ -382,7 +530,6 @@
       .then(function (data) {
         el('f-prompt').value = data.prompt;
         updatePromptCount();
-        state.referenceNote = data.prompt;
         var note = el('ref-note');
         note.textContent = '识别结果：' + data.prompt;
         note.hidden = false;
@@ -396,8 +543,7 @@
   }
 
   function updatePromptCount() {
-    var value = el('f-prompt').value || '';
-    el('prompt-count').textContent = String(value.length);
+    el('prompt-count').textContent = String((el('f-prompt').value || '').length);
   }
 
   /* ---------------- 生成 ---------------- */
@@ -410,6 +556,10 @@
       el('f-prompt').focus();
       return;
     }
+    if (state.tool === 'image-remix' && !state.reference) {
+      toast('参考图重绘需要先上传一张图', true);
+      return;
+    }
     var body = {
       prompt: prompt,
       negative_prompt: (el('f-negative').value || '').trim(),
@@ -419,7 +569,7 @@
       count: state.count,
       model: state.model,
       seed: Number(el('f-seed').value) || 0,
-      reference: state.reference
+      reference: state.tool === 'image-remix' ? state.reference : ''
     };
 
     state.busy = true;
@@ -440,20 +590,18 @@
         }
         loadHistory();
       })
-      .catch(function (err) {
-        toast('生成失败：' + err.message, true);
-      })
+      .catch(function (err) { toast('生成失败：' + err.message, true); })
       .then(function () {
         state.busy = false;
         button.disabled = false;
-        button.textContent = '生成图片';
+        button.textContent = state.tool === 'image-remix' ? '重绘图片' : '生成图片';
         el('gen-status').textContent = '';
       });
   }
 
-  /* ---------------- 结果与历史 ---------------- */
+  /* ---------------- 结果 ---------------- */
 
-  function tileHtml(item, index) {
+  function tileHtml(item) {
     var meta = item.width + '×' + item.height + ' · seed ' + item.seed;
     return '' +
       '<div class="tile">' +
@@ -477,11 +625,7 @@
     var empty = el('images-empty');
     var items = data.items || [];
     el('result-title').textContent = items.length ? ('本次生成 ' + items.length + ' 张') : '本次没有产出';
-    if (!items.length) {
-      gallery.hidden = true;
-      empty.hidden = false;
-      return;
-    }
+    if (!items.length) { gallery.hidden = true; empty.hidden = false; return; }
     empty.hidden = true;
     gallery.hidden = false;
     gallery.innerHTML = items.map(tileHtml).join('');
@@ -491,11 +635,7 @@
     var gallery = el('gallery');
     var empty = el('images-empty');
     el('result-title').textContent = rows.length ? ('历史记录 · ' + rows.length + ' 张') : '还没有历史记录';
-    if (!rows.length) {
-      gallery.hidden = true;
-      empty.hidden = false;
-      return;
-    }
+    if (!rows.length) { gallery.hidden = true; empty.hidden = false; return; }
     empty.hidden = true;
     gallery.hidden = false;
     gallery.innerHTML = rows.map(tileHtml).join('');
@@ -540,10 +680,7 @@
     if (!gallery) { return; }
     gallery.addEventListener('click', function (event) {
       var open = event.target.closest('[data-open]');
-      if (open) {
-        openLightbox(open.getAttribute('data-open'), open.getAttribute('data-meta'));
-        return;
-      }
+      if (open) { openLightbox(open.getAttribute('data-open'), open.getAttribute('data-meta')); return; }
       var download = event.target.closest('[data-download]');
       if (download) {
         var link = document.createElement('a');
@@ -559,7 +696,8 @@
         var id = del.getAttribute('data-delete');
         api('/api/images/' + encodeURIComponent(id), { method: 'DELETE' })
           .then(function () {
-            del.closest('.tile').remove();
+            var tile = del.closest('.tile');
+            if (tile) { tile.remove(); }
             toast('已删除');
           })
           .catch(function (err) { toast('删除失败：' + err.message, true); });
@@ -578,44 +716,37 @@
 
   /* ---------------- 导航 ---------------- */
 
-  function switchView(view) {
-    ['home', 'studio', 'video'].forEach(function (name) {
-      var node = el('view-' + name);
-      if (node) { node.classList.toggle('active', name === view); }
-    });
-    var items = el('rail').querySelectorAll('[data-view]');
-    for (var i = 0; i < items.length; i += 1) {
-      items[i].classList.toggle('active', items[i].getAttribute('data-view') === view);
-    }
-    el('btn-new-video').hidden = view !== 'video';
-    if (view === 'video' && window.__videoBoot) { window.__videoBoot(); }
-    if (view === 'home') { renderHome(); }
-  }
-
   function bindNav() {
-    el('rail').addEventListener('click', function (event) {
-      var item = event.target.closest('[data-view]');
+    var rail = el('rail');
+    rail.addEventListener('click', function (event) {
+      var item = event.target.closest('[data-cat]');
       if (!item) { return; }
-      var view = item.getAttribute('data-view');
-      if (view === 'studio') {
-        var tool = TOOLS.filter(function (t) { return t.id === state.tool; })[0] || TOOLS[0];
-        applyTool(tool);
-      }
-      switchView(view);
+      var cat = item.getAttribute('data-cat');
+      renderCategory(cat);
+      switchView('home');
     });
 
-    el('btn-back').addEventListener('click', function () { switchView('home'); });
-
-    el('home-tabs').addEventListener('click', function (event) {
-      var tab = event.target.closest('[data-cat]');
-      if (!tab) { return; }
-      state.homeTab = tab.getAttribute('data-cat');
-      renderHome();
+    el('crumb').addEventListener('click', function (event) {
+      var jump = event.target.closest('[data-cat-jump]');
+      if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
     });
 
-    el('tool-grid').addEventListener('click', function (event) {
+    el('group-list').addEventListener('click', function (event) {
       var card = event.target.closest('[data-tool]');
       if (card) { openTool(card.getAttribute('data-tool')); }
+    });
+
+    el('btn-back').addEventListener('click', function () {
+      renderCategory(state.cat || 'home');
+      switchView('home');
+    });
+
+    el('f-samples').addEventListener('click', function (event) {
+      var chip = event.target.closest('[data-sample]');
+      if (!chip) { return; }
+      el('f-prompt').value = chip.getAttribute('data-sample');
+      updatePromptCount();
+      el('f-prompt').focus();
     });
   }
 
@@ -637,16 +768,19 @@
     el('f-prompt').addEventListener('keydown', function (event) {
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { generate(); }
     });
-    renderHome();
-    applyTool(TOOLS[0]);
+
+    renderCategory('home');
+    renderSamples(false);
     loadOptions();
     loadHistory();
+
     try {
       var params = new URLSearchParams(window.location.search);
-      var wantTool = params.get('tool');
-      if (wantTool) { openTool(wantTool); }
-      if (params.get('tab') === 'history') { switchView('studio'); setTab('history'); }
-    } catch (err) { /* 老浏览器忽略 */ }
+      var tool = params.get('tool');
+      if (tool) { openTool(tool); }
+      else if (params.get('cat')) { renderCategory(params.get('cat')); }
+      if (params.get('tab') === 'history') { setTab('history'); }
+    } catch (err) { /* 忽略 */ }
   }
 
   if (document.readyState === 'loading') {
