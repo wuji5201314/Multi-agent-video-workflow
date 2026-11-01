@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiMediaAudioMapper">
+    <resultMap id="MediaAudioMap" type="com.yanque.aimedia.pojo.entity.AiMediaAudioEntity">
+        <id property="id" column="id"/>
+        <result property="videoId" column="video_id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="objectKey" column="object_key"/>
+        <result property="fileFormat" column="file_format"/>
+        <result property="contentType" column="content_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="durationMs" column="duration_ms"/>
+        <result property="sampleRate" column="sample_rate"/>
+        <result property="channels" column="channels"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_media_audio(
+            video_id, task_id, object_key, file_format, content_type,
+            file_size, duration_ms, sample_rate, channels
+        ) values (
+            #{videoId}, #{taskId}, #{objectKey}, #{fileFormat}, #{contentType},
+            #{fileSize}, #{durationMs}, #{sampleRate}, #{channels}
+        )
+    </insert>
+
+    <select id="selectByTaskId" resultMap="MediaAudioMap">
+        select id, video_id, task_id, object_key, file_format, content_type,
+               file_size, duration_ms, sample_rate, channels, created_at
+        from ai_media_audio
+        where task_id = #{taskId}
+    </select>
+
+    <select id="selectLatestByVideoId" resultMap="MediaAudioMap">
+        select id, video_id, task_id, object_key, file_format, content_type,
+               file_size, duration_ms, sample_rate, channels, created_at
+        from ai_media_audio
+        where video_id = #{videoId}
+        order by created_at desc, id desc
+        limit 1
+    </select>
+</mapper>

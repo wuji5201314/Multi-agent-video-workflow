@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# 本地环境与密钥（.env.example 会提交，真实 .env 不提交）
+.env
+.env.local
+*.pem
+*.p12
+
+# 运行产物：数据库、成片、素材、诊断帧
+output/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

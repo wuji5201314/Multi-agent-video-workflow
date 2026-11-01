@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.DouyinCollectTargetMapper">
+    <select id="selectEnabled" resultType="com.yanque.aimedia.pojo.entity.DouyinCollectTargetEntity">
+        select id, target_type, target_value, target_name, enabled, last_collect_at, created_at, updated_at
+        from ai_douyin_collect_target
+        where enabled = 1
+        order by target_type desc, id
+    </select>
+
+    <update id="updateLastCollectAt">
+        update ai_douyin_collect_target
+        set last_collect_at = #{lastCollectAt}
+        where id = #{id}
+    </update>
+</mapper>

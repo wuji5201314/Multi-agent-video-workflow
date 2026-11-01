@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.DouyinVideoMapper">
+    <select id="selectByDouyinVideoId" resultType="com.yanque.aimedia.pojo.entity.DouyinVideoEntity">
+        select id, douyin_video_id, video_url, title, description, author_sec_user_id, author_name,
+               author_url, cover_url, duration_ms, publish_time, matched_keywords, first_seen_at,
+               last_seen_at, created_at, updated_at
+        from ai_douyin_video
+        where douyin_video_id = #{douyinVideoId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_douyin_video(
+            douyin_video_id, video_url, title, description, author_sec_user_id, author_name,
+            author_url, cover_url, duration_ms, publish_time, matched_keywords,
+            first_seen_at, last_seen_at
+        ) values (
+            #{douyinVideoId}, #{videoUrl}, #{title}, #{description}, #{authorSecUserId}, #{authorName},
+            #{authorUrl}, #{coverUrl}, #{durationMs}, #{publishTime}, #{matchedKeywords},
+            #{firstSeenAt}, #{lastSeenAt}
+        )
+    </insert>
+
+    <update id="update">
+        update ai_douyin_video
+        set video_url = #{videoUrl},
+            title = #{title},
+            description = #{description},
+            author_sec_user_id = #{authorSecUserId},
+            author_name = #{authorName},
+            author_url = #{authorUrl},
+            cover_url = #{coverUrl},
+            duration_ms = #{durationMs},
+            publish_time = #{publishTime},
+            matched_keywords = #{matchedKeywords},
+            last_seen_at = #{lastSeenAt}
+        where id = #{id}
+    </update>
+
+    <select id="selectPage" resultType="com.yanque.aimedia.pojo.entity.DouyinVideoListRow">
+        select video.id, video.douyin_video_id, video.video_url, video.title, video.description,
+               video.author_sec_user_id, video.author_name, video.author_url, video.cover_url,
+               video.duration_ms, video.publish_time, video.matched_keywords,
+               video.first_seen_at, video.last_seen_at, video.created_at, video.updated_at,
+               current_snapshot.like_count,
+               current_snapshot.collected_at as metrics_collected_at,
+               previous_snapshot.like_count as previous_like_count
+        from ai_douyin_video video
+        left join ai_douyin_video_snapshot current_snapshot on current_snapshot.id = (
+            select snapshot.id
+            from ai_douyin_video_snapshot snapshot
+            where snapshot.video_id = video.id
+            order by snapshot.collect_window desc, snapshot.id desc
+            limit 1
+        )
+        left join ai_douyin_video_snapshot previous_snapshot on previous_snapshot.id = (
+            select snapshot.id
+            from ai_douyin_video_snapshot snapshot
+            where snapshot.video_id = video.id
+            order by snapshot.collect_window desc, snapshot.id desc
+            limit 1 offset 1
+        )
+        <where>
+            <if test="keyword != null and keyword != ''">
+                video.title like concat('%', #{keyword}, '%')
+                or video.description like concat('%', #{keyword}, '%')
+                or video.author_name like concat('%', #{keyword}, '%')
+                or cast(video.matched_keywords as char) like concat('%', #{keyword}, '%')
+            </if>
+        </where>
+        order by video.last_seen_at desc, video.id desc
+    </select>
+</mapper>

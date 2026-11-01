@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiMediaTranscriptMapper">
+    <resultMap id="MediaTranscriptMap" type="com.yanque.aimedia.pojo.entity.AiMediaTranscriptEntity">
+        <id property="id" column="id"/>
+        <result property="videoId" column="video_id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="audioId" column="audio_id"/>
+        <result property="provider" column="provider"/>
+        <result property="providerTaskId" column="provider_task_id"/>
+        <result property="language" column="language"/>
+        <result property="fullText" column="full_text"/>
+        <result property="utterancesJson" column="utterances_json"/>
+        <result property="durationMs" column="duration_ms"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_media_transcript(
+            video_id, task_id, audio_id, provider, provider_task_id,
+            language, duration_ms
+        ) values (
+            #{videoId}, #{taskId}, #{audioId}, #{provider}, #{providerTaskId},
+            #{language}, #{durationMs}
+        )
+    </insert>
+
+    <select id="selectByTaskId" resultMap="MediaTranscriptMap">
+        select id, video_id, task_id, audio_id, provider, provider_task_id,
+               language, full_text, utterances_json, duration_ms, created_at, updated_at
+        from ai_media_transcript
+        where task_id = #{taskId}
+    </select>
+
+    <select id="selectLatestByVideoId" resultMap="MediaTranscriptMap">
+        select id, video_id, task_id, audio_id, provider, provider_task_id,
+               language, full_text, duration_ms, created_at, updated_at
+        from ai_media_transcript
+        where id = (
+            select max(id)
+            from ai_media_transcript
+            where video_id = #{videoId}
+        )
+    </select>
+
+    <select id="countUtterances" resultType="long">
+        select coalesce((
+            select json_length(utterances_json)
+            from ai_media_transcript
+            where id = (
+                select max(id)
+                from ai_media_transcript
+                where video_id = #{videoId}
+            )
+        ), 0)
+    </select>
+
+    <select id="selectUtterancePage"
+            resultType="com.yanque.aimedia.pojo.vo.resvo.AiMediaTranscriptUtteranceRes">
+        with recursive page_index as (
+            select 0 as value
+            union all
+            select value + 1
+            from page_index
+            where value + 1 &lt; #{limit}
+        )
+        select #{offset} + page_index.value + 1 as segmentNo,
+               cast(json_unquote(json_extract(
+                   transcript.utterances_json,
+                   concat('$[', #{offset} + page_index.value, '].start_time')
+               )) as unsigned) as startTime,
+               cast(json_unquote(json_extract(
+                   transcript.utterances_json,
+                   concat('$[', #{offset} + page_index.value, '].end_time')
+               )) as unsigned) as endTime,
+               json_unquote(json_extract(
+                   transcript.utterances_json,
+                   concat('$[', #{offset} + page_index.value, '].text')
+               )) as text,
+               coalesce(
+                   nullif(json_unquote(json_extract(
+                       transcript.utterances_json,
+                       concat('$[', #{offset} + page_index.value, '].speaker')
+                   )), 'null'),
+                   nullif(json_unquote(json_extract(
+                       transcript.utterances_json,
+                       concat('$[', #{offset} + page_index.value, '].additions.speaker')
+                   )), 'null')
+               ) as speaker
+        from ai_media_transcript transcript
+        cross join page_index
+        where transcript.id = (
+            select max(id)
+            from ai_media_transcript
+            where video_id = #{videoId}
+        )
+          and #{offset} + page_index.value &lt; json_length(transcript.utterances_json)
+        order by page_index.value
+    </select>
+
+    <update id="saveAsrResult">
+        update ai_media_transcript
+        set full_text = #{fullText}, utterances_json = #{utterancesJson}
+        where task_id = #{taskId}
+    </update>
+
+    <update id="saveRefinedResult">
+        update ai_media_transcript
+        set full_text = #{fullText}, utterances_json = #{utterancesJson}
+        where task_id = #{taskId}
+    </update>
+</mapper>

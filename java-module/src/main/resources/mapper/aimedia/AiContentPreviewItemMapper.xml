@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiContentPreviewItemMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_content_preview_item(task_id, sequence_no, need_id, object_key, file_size, width, height)
+        values(#{taskId}, #{sequenceNo}, #{needId}, #{objectKey}, #{fileSize}, #{width}, #{height})
+    </insert>
+    <delete id="deleteByTaskId">delete from ai_content_preview_item where task_id=#{taskId}</delete>
+    <select id="selectByTaskId" resultType="com.yanque.aimedia.pojo.entity.AiContentPreviewItemEntity">
+        select id, task_id, sequence_no, need_id, object_key, file_size, width, height
+        from ai_content_preview_item where task_id=#{taskId} order by sequence_no
+    </select>
+</mapper>

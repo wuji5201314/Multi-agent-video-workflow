@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiMediaVideoClipMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_media_video_clip(
+            video_id, task_id, transcript_id, segment_no,
+            start_ms, end_ms, duration_ms,
+            title, summary, core_viewpoint, clip_type, value_reason,
+            tags_json, speakers_json, transcript_text
+        ) values (
+            #{videoId}, #{taskId}, #{transcriptId}, #{segmentNo},
+            #{startMs}, #{endMs}, #{durationMs},
+            #{title}, #{summary}, #{coreViewpoint}, #{clipType}, #{valueReason},
+            #{tagsJson}, #{speakersJson}, #{transcriptText}
+        )
+    </insert>
+
+    <delete id="deleteByTaskId">
+        delete from ai_media_video_clip where task_id = #{taskId}
+    </delete>
+
+    <select id="selectByVideoId" resultType="com.yanque.aimedia.pojo.entity.AiMediaVideoClipEntity">
+        select id, video_id, task_id, transcript_id, segment_no,
+               start_ms, end_ms, duration_ms,
+               title, summary, core_viewpoint, clip_type, value_reason,
+               tags_json, speakers_json, transcript_text,
+               object_key, file_size, created_at, updated_at
+        from ai_media_video_clip
+        where video_id = #{videoId}
+        order by segment_no
+    </select>
+
+    <select id="selectByTaskId" resultType="com.yanque.aimedia.pojo.entity.AiMediaVideoClipEntity">
+        select id, video_id, task_id, transcript_id, segment_no,
+               start_ms, end_ms, duration_ms,
+               title, summary, core_viewpoint, clip_type, value_reason,
+               tags_json, speakers_json, transcript_text,
+               object_key, file_size, created_at, updated_at
+        from ai_media_video_clip
+        where task_id = #{taskId}
+        order by segment_no
+    </select>
+
+    <select id="selectById" resultType="com.yanque.aimedia.pojo.entity.AiMediaVideoClipEntity">
+        select id, video_id, task_id, transcript_id, segment_no,
+               start_ms, end_ms, duration_ms,
+               title, summary, core_viewpoint, clip_type, value_reason,
+               tags_json, speakers_json, transcript_text,
+               object_key, file_size, created_at, updated_at
+        from ai_media_video_clip
+        where id = #{id}
+    </select>
+
+    <update id="saveRenderedFile">
+        update ai_media_video_clip
+        set object_key = #{objectKey}, file_size = #{fileSize}
+        where id = #{id} and object_key is null
+    </update>
+
+    <select id="selectPage" resultType="com.yanque.aimedia.pojo.entity.AiMediaVideoClipListRow">
+        select clip.id, clip.video_id, clip.task_id, clip.transcript_id, clip.segment_no,
+               clip.start_ms, clip.end_ms, clip.duration_ms,
+               clip.title, clip.summary, clip.core_viewpoint, clip.clip_type, clip.value_reason,
+               clip.tags_json, clip.speakers_json, clip.transcript_text,
+               clip.object_key, clip.file_size, clip.created_at, clip.updated_at,
+               video.title as source_video_title,
+               video.original_file_name as source_video_file_name
+        from ai_media_video_clip clip
+        inner join ai_media_video video on video.id = clip.video_id
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (clip.title like concat('%', #{keyword}, '%')
+                 or clip.summary like concat('%', #{keyword}, '%')
+                 or clip.core_viewpoint like concat('%', #{keyword}, '%')
+                 or clip.tags_json like concat('%', #{keyword}, '%')
+                 or video.title like concat('%', #{keyword}, '%'))
+            </if>
+            <if test="clipType != null and clipType != ''">
+                and clip.clip_type = #{clipType}
+            </if>
+            <if test="speaker != null and speaker != ''">
+                and clip.speakers_json like concat('%', #{speaker}, '%')
+            </if>
+        </where>
+        order by clip.created_at desc, clip.id desc
+    </select>
+</mapper>

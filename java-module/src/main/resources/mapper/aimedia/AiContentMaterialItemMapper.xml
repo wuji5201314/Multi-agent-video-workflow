@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiContentMaterialItemMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_content_material_item(
+          task_id, need_id, article_excerpt, asset_type, material_id, video_id, clip_type,
+          duration_ms, rerank_score, render_engine, visual_type, visual_spec_json, image_prompt,
+          match_reason, provider_task_id, image_object_key, image_file_size, image_width, image_height,
+          image_error, visual_review_score, visual_review_summary, generation_attempt, regenerate_feedback
+        ) values (
+          #{taskId}, #{needId}, #{articleExcerpt}, #{assetType}, #{materialId}, #{videoId}, #{clipType},
+          #{durationMs}, #{rerankScore}, #{renderEngine}, #{visualType}, #{visualSpecJson}, #{imagePrompt},
+          #{matchReason}, #{providerTaskId}, #{imageObjectKey}, #{imageFileSize}, #{imageWidth}, #{imageHeight},
+          #{imageError}, #{visualReviewScore}, #{visualReviewSummary}, #{generationAttempt}, #{regenerateFeedback}
+        )
+    </insert>
+    <delete id="deleteByTaskId">delete from ai_content_material_item where task_id=#{taskId}</delete>
+    <select id="selectByTaskId" resultType="com.yanque.aimedia.pojo.entity.AiContentMaterialItemEntity">
+        select id, task_id, need_id, article_excerpt, asset_type, material_id, video_id, clip_type,
+               duration_ms, rerank_score, render_engine, visual_type, visual_spec_json, image_prompt,
+               match_reason, provider_task_id, image_object_key, image_file_size, image_width, image_height,
+               image_error, visual_review_score, visual_review_summary, generation_attempt, regenerate_feedback
+        from ai_content_material_item where task_id=#{taskId} order by id
+    </select>
+    <select id="selectByTaskAndNeed" resultType="com.yanque.aimedia.pojo.entity.AiContentMaterialItemEntity">
+        select id, task_id, need_id, article_excerpt, asset_type, material_id, video_id, clip_type,
+               duration_ms, rerank_score, render_engine, visual_type, visual_spec_json, image_prompt,
+               match_reason, provider_task_id, image_object_key, image_file_size, image_width, image_height,
+               image_error, visual_review_score, visual_review_summary, generation_attempt, regenerate_feedback
+        from ai_content_material_item where task_id=#{taskId} and need_id=#{needId}
+    </select>
+    <update id="updateGeneratedImage">
+        update ai_content_material_item set asset_type=#{assetType}, render_engine=#{renderEngine},
+          visual_type=#{visualType}, visual_spec_json=#{visualSpecJson}, image_prompt=#{imagePrompt},
+          provider_task_id=#{providerTaskId}, image_object_key=#{imageObjectKey}, image_file_size=#{imageFileSize},
+          image_width=#{imageWidth}, image_height=#{imageHeight}, image_error=#{imageError},
+          visual_review_score=#{visualReviewScore}, visual_review_summary=#{visualReviewSummary},
+          generation_attempt=#{generationAttempt}, regenerate_feedback=#{regenerateFeedback}, match_reason=#{matchReason}
+        where id=#{id} and task_id=#{taskId} and need_id=#{needId}
+    </update>
+</mapper>

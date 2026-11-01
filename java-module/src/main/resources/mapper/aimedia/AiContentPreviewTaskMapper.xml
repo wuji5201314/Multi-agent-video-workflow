@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yanque.aimedia.mapper.AiContentPreviewTaskMapper">
+    <resultMap id="TaskMap" type="com.yanque.aimedia.pojo.entity.AiContentPreviewTaskEntity">
+        <id property="id" column="id"/><result property="reviewTaskId" column="review_task_id"/>
+        <result property="conversationId" column="conversation_id"/><result property="contentRevision" column="content_revision"/>
+        <result property="format" column="format"/><result property="status" column="status"/>
+        <result property="previewPlanJson" column="preview_plan_json"/><result property="coverObjectKey" column="cover_object_key"/>
+        <result property="coverFileSize" column="cover_file_size"/><result property="videoObjectKey" column="video_object_key"/>
+        <result property="videoFileSize" column="video_file_size"/><result property="durationMs" column="duration_ms"/>
+        <result property="errorMessage" column="error_message"/><result property="createdBy" column="created_by"/>
+        <result property="startedAt" column="started_at"/><result property="finishedAt" column="finished_at"/>
+        <result property="createdAt" column="created_at"/><result property="updatedAt" column="updated_at"/>
+    </resultMap>
+    <sql id="Columns">id, review_task_id, conversation_id, content_revision, format, status, preview_plan_json,
+        cover_object_key, cover_file_size, video_object_key, video_file_size, duration_ms, error_message,
+        created_by, started_at, finished_at, created_at, updated_at</sql>
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into ai_content_preview_task(review_task_id, conversation_id, content_revision, format, status, preview_plan_json, created_by)
+        values(#{reviewTaskId}, #{conversationId}, #{contentRevision}, #{format}, #{status}, #{previewPlanJson}, #{createdBy})
+    </insert>
+    <select id="selectById" resultMap="TaskMap">select <include refid="Columns"/> from ai_content_preview_task where id=#{id}</select>
+    <select id="selectByReviewTaskId" resultMap="TaskMap">select <include refid="Columns"/> from ai_content_preview_task where review_task_id=#{reviewTaskId}</select>
+    <select id="selectPending" resultMap="TaskMap">select <include refid="Columns"/> from ai_content_preview_task where status='PENDING' order by id limit #{limit}</select>
+    <update id="claim">update ai_content_preview_task set status='PROCESSING', started_at=coalesce(started_at, now()), finished_at=null, error_message=null where id=#{id} and status='PENDING'</update>
+    <!-- 视频成品需要真正落库 video_* 与时长；轮播结果里这些字段本来就是 null，写 null 不会有副作用。 -->
+    <update id="markSuccess">update ai_content_preview_task set status='SUCCESS', format=#{format}, cover_object_key=#{coverObjectKey}, cover_file_size=#{coverFileSize}, video_object_key=#{videoObjectKey}, video_file_size=#{videoFileSize}, duration_ms=#{durationMs}, error_message=null, finished_at=now() where id=#{id} and status='PROCESSING'</update>
+    <update id="markFailed">update ai_content_preview_task set status='FAILED', error_message=#{errorMessage}, finished_at=now() where id=#{id} and status='PROCESSING'</update>
+    <!-- 重试保留任务自身格式，具体是否降级为轮播由视频开关在渲染前后统一判定。 -->
+    <update id="prepareRetry">update ai_content_preview_task set status='PENDING',
+        cover_object_key=null, cover_file_size=null, video_object_key=null, video_file_size=null, duration_ms=null,
+        error_message=null, started_at=null, finished_at=null where id=#{id} and status in ('FAILED','SUCCESS')</update>
+    <update id="failStale">update ai_content_preview_task set status='FAILED', error_message='成品渲染中断，请手动重试', finished_at=now() where status='PROCESSING' and updated_at &lt; #{updatedBefore}</update>
+</mapper>
