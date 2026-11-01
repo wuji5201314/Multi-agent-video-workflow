@@ -210,6 +210,15 @@ def create_app() -> FastAPI:
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="参考图不存在") from exc
 
+    @app.middleware("http")
+    async def no_cache_static(request: Request, call_next):
+        """前端还在快速迭代，静态文件一律不缓存，避免浏览器拿旧 JS。"""
+
+        response = await call_next(request)
+        if not request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
+
     # 前端可能由 yq-admin 的 web 容器托管在别的端口，跨源调用这些 /api 时需要放行。
     origins = [item.strip() for item in settings.cors_origins.split(",") if item.strip()]
     app.add_middleware(

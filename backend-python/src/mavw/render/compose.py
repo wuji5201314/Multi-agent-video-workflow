@@ -169,13 +169,12 @@ class VideoComposer:
         x: int,
         y: int,
         duration_ms: int,
-        radius: int = 26,
     ) -> None:
         """把数字人小窗以圆角贴纸的形式叠到主画面上。
 
         mask 是圆角灰度图（白=保留），border 是白描边环；两者都由
         digital_human.rounded_mask_png / border_png 预先画好再传进来，
-        避免在 FFmpeg 里堆 geq 表达式。
+        避免在 FFmpeg 里堆 geq 表达式。圆角半径在画 mask 时就已确定，这里不重复接收。
         """
 
         seconds = max(duration_ms, 200) / 1000

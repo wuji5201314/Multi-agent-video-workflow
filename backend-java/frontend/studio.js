@@ -207,9 +207,11 @@
 
   /* ---------------- 参数面板 ---------------- */
 
-  function renderChips(containerId, items, activeKey, onPick) {
+  // getActive 每次重新取值，避免把"当前选中项"缓存进闭包导致高亮不更新
+  function renderChips(containerId, items, getActive, onPick) {
     var box = el(containerId);
     if (!box) { return; }
+    var activeKey = getActive();
     box.innerHTML = items.map(function (item) {
       var active = item.key === activeKey ? ' active' : '';
       return '<button class="chip' + active + '" data-key="' + esc(item.key) + '">' + esc(item.label) + '</button>';
@@ -218,13 +220,14 @@
       var chip = event.target.closest('[data-key]');
       if (!chip) { return; }
       onPick(chip.getAttribute('data-key'));
-      renderChips(containerId, items, onPick.__active(), onPick);
+      renderChips(containerId, items, getActive, onPick);
     };
   }
 
-  function renderSegmented(containerId, items, activeKey, onPick) {
+  function renderSegmented(containerId, items, getActive, onPick) {
     var box = el(containerId);
     if (!box) { return; }
+    var activeKey = getActive();
     box.innerHTML = items.map(function (item) {
       var active = item.key === activeKey ? ' active' : '';
       return '<button class="seg-item' + active + '" data-key="' + esc(item.key) + '">' + esc(item.label) + '</button>';
@@ -233,42 +236,35 @@
       var item = event.target.closest('[data-key]');
       if (!item) { return; }
       onPick(item.getAttribute('data-key'));
-      renderSegmented(containerId, items, onPick.__active(), onPick);
+      renderSegmented(containerId, items, getActive, onPick);
     };
   }
 
-  function activeStyle() { return state.style; }
-  function activeRatio() { return state.ratio; }
-  function activeQuality() { return state.quality; }
-  function activeCount() { return String(state.count); }
-  function activeModel() { return state.model; }
+  function getStyle() { return state.style; }
+  function getRatio() { return state.ratio; }
+  function getQuality() { return state.quality; }
+  function getCount() { return String(state.count); }
+  function getModel() { return state.model; }
 
   function paintControls() {
-    renderChips('f-style', options.styles, state.style, function (key) {
-      state.style = key; activeStyle.__active = activeStyle;
-    });
-    activeStyle.__active = activeStyle;
+    renderChips('f-style', options.styles, getStyle, function (key) { state.style = key; });
 
     renderChips('f-ratio', options.ratios.map(function (r) {
       return { key: r.key, label: r.label };
-    }), state.ratio, function (key) {
+    }), getRatio, function (key) {
       state.ratio = key;
       var found = options.ratios.filter(function (r) { return r.key === key; })[0];
       if (found) { el('ratio-hint').textContent = found.width + ' × ' + found.height; }
     });
-    activeRatio.__active = activeRatio;
 
-    renderSegmented('f-quality', options.qualities, state.quality, function (key) { state.quality = key; });
-    activeQuality.__active = activeQuality;
+    renderSegmented('f-quality', options.qualities, getQuality, function (key) { state.quality = key; });
 
     renderSegmented('f-count', [
       { key: '1', label: '1 张' }, { key: '2', label: '2 张' },
       { key: '3', label: '3 张' }, { key: '4', label: '4 张' }
-    ], String(state.count), function (key) { state.count = Number(key); });
-    activeCount.__active = function () { return String(state.count); };
+    ], getCount, function (key) { state.count = Number(key); });
 
-    renderSegmented('f-model', options.models, state.model, function (key) { state.model = key; });
-    activeModel.__active = activeModel;
+    renderSegmented('f-model', options.models, getModel, function (key) { state.model = key; });
   }
 
   function loadOptions() {

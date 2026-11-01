@@ -203,7 +203,6 @@ async def main() -> int:
         x=x,
         y=y,
         duration_ms=spec.duration_ms,
-        radius=radius,
     )
     print(f"  → {picture}（{probe_duration_ms(picture)}ms）")
 

@@ -323,7 +323,6 @@ class VideoPreviewRenderer:
                 x=x,
                 y=y,
                 duration_ms=duration_ms,
-                radius=radius,
             )
             logger.info(
                 "数字人画中画已合成：provider=%s，位置=(%s,%s)，尺寸=%sx%s",
