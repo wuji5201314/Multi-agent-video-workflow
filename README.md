@@ -53,6 +53,30 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 
 决策只有三种：`approve`（通过）/ `edit`（带着修改再跑一遍）/ `reject`（打回重做并作废下游产物）。
 
+## 前端工作台（web/）
+
+起服务后直接打开 <http://127.0.0.1:8010/>，就是一个 Apple 风格的单页工作台：左边任务列表，右边步骤进度 + 当前步骤产出 + GATE 操作条。
+
+![工作台](docs/screenshots/workspace.png)
+
+能力：
+
+- 新建任务：一句话简报 → 自动选题
+- 选题：三张卡片点选，再按「通过」
+- 脚本：标题 / 封面标题 / 文案 / 标签 / 每个镜头的大字与口播都能直接改
+- 素材：看缩略图，把 `image_path` 换成自己的图片路径即用真图
+- 成片：内置播放器，直接看 1080×1920 的 MP4
+- 发布：标题、文案、标签、平台与发布单
+- 三种决策：通过 / 带着修改重跑 / 打回重做
+
+技术上刻意保持零构建：`web/` 下只有 `index.html`、`app.css`、`app.js` 三个文件，由 FastAPI 用 `StaticFiles` 挂在根路径；接口全部复用 `/api/*`，没有额外依赖，也没有打包步骤。后端只多了两个只读路由：素材原图 `/api/tasks/{id}/materials/{index}` 与产物本体 `/api/tasks/{id}/artifacts/{aid}`（都只放行数据库里登记过的路径）。
+
+## 目录里的 Java 代码是什么
+
+`java/aimedia-module/` 是从 yq-admin 原样复制过来的 `com.yanque.aimedia` 包（187 个文件中占 133 个 java/xml），**不是本服务的运行时**，作用是字段与状态语义的对照物：枚举、实体、Mapper、Handler、Controller 都保持你原来的样子，方便以后并回 yq-admin 时逐项对齐。
+
+真正跑起来的是 `src/yq_fusion`（Python）。两者没有代码级耦合，唯一契约是 `/ai/content-generation/topics/previews/render` 这个同名同形的接口。
+
 ## 配置
 
 全部走环境变量，见 [.env.example](.env.example)。默认值是「离线也能出片」：

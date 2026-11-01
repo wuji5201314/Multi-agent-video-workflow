@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import get_settings
@@ -76,6 +79,39 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/tasks/{task_id}/materials/{index}")
+    async def material_raw(task_id: int, index: int) -> FileResponse:
+        """按镜头序号返回素材原图；只允许数据库里记录过的路径，避免任意文件读取。"""
+
+        try:
+            task = service.get_task(task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        row = next((item for item in task["steps"] if item["code"] == "MATERIAL"), None)
+        shots = (row or {}).get("payload", {}).get("shots") or []
+        if index < 0 or index >= len(shots):
+            raise HTTPException(status_code=404, detail=f"没有第 {index} 个镜头")
+        path = Path(str(shots[index].get("image_path") or ""))
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="素材文件不存在")
+        return FileResponse(path)
+
+    @app.get("/api/tasks/{task_id}/artifacts/{artifact_id}")
+    async def artifact_raw(task_id: int, artifact_id: int) -> FileResponse:
+        """返回成片/封面本体，供前端 video 标签播放。"""
+
+        try:
+            task = service.get_task(task_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        row = next((item for item in task["artifacts"] if item["id"] == artifact_id), None)
+        if row is None:
+            raise HTTPException(status_code=404, detail="产物不存在")
+        path = Path(str(row["path"]))
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="产物文件已丢失")
+        return FileResponse(path)
+
     @app.post("/ai/content-generation/topics/previews/render", response_model=RenderResult)
     async def render_preview(request: RenderRequest) -> RenderResult:
         """与 yq-admin 的 ContentGenerationPythonClient.renderPreview 对齐的同名路径。"""
@@ -83,6 +119,11 @@ def create_app() -> FastAPI:
         if request.format != "VIDEO":
             raise HTTPException(status_code=400, detail="本项目只处理 format=VIDEO 的成片请求。")
         return await service.render_preview(request)
+
+    # 前端静态资源放在最后挂载，避免 "/" 吞掉上面的 /api 与 /ai 路由。
+    web_dir = Path(__file__).resolve().parents[2] / "web"
+    if web_dir.is_dir():
+        app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
     return app
 
