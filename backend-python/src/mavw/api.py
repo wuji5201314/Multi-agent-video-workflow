@@ -1,4 +1,4 @@
-﻿"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
+"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -120,10 +121,22 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=400, detail="本项目只处理 format=VIDEO 的成片请求。")
         return await service.render_preview(request)
 
+    # 前端可能由 yq-admin 的 web 容器托管在别的端口，跨源调用这些 /api 时需要放行。
+    origins = [item.strip() for item in settings.cors_origins.split(",") if item.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins or ["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
     # 前端静态资源放在最后挂载，避免 "/" 吞掉上面的 /api 与 /ai 路由。
-    web_dir = Path(__file__).resolve().parents[2] / "web"
+    # 目录来自 backend-java/frontend（可用 WEB_ROOT 覆盖）；找不到就退化成纯 API 服务。
+    web_dir = settings.web_dir()
     if web_dir.is_dir():
         app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
+    else:
+        logger.warning("前端目录不存在，仅提供 API：%s", web_dir)
 
     return app
 

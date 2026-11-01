@@ -53,7 +53,7 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 
 决策只有三种：`approve`（通过）/ `edit`（带着修改再跑一遍）/ `reject`（打回重做并作废下游产物）。
 
-## 前端工作台（web/）
+## 前端工作台（backend-java/frontend/）
 
 起服务后直接打开 <http://127.0.0.1:8010/>，就是一个 Apple 风格的单页工作台：左边任务列表，右边步骤进度 + 当前步骤产出 + GATE 操作条。
 
@@ -69,7 +69,9 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 - 发布：标题、文案、标签、平台与发布单
 - 三种决策：通过 / 带着修改重跑 / 打回重做
 
-技术上刻意保持零构建：`web/` 下只有 `index.html`、`app.css`、`app.js` 三个文件，由 FastAPI 用 `StaticFiles` 挂在根路径；接口全部复用 `/api/*`，没有额外依赖，也没有打包步骤。后端只多了两个只读路由：素材原图 `/api/tasks/{id}/materials/{index}` 与产物本体 `/api/tasks/{id}/artifacts/{aid}`（都只放行数据库里登记过的路径）。
+前端代码放在 **`backend-java/frontend/`**：它将来跟 yq-admin 的 web 端一起走，和 Java 侧同属一个部署单元。目录里只有 `index.html`、`app.css`、`app.js` 三个文件，零构建、无打包步骤。
+
+本地开发时 Python 会把该目录用 `StaticFiles` 挂在根路径（目录由 `WEB_ROOT` 决定，默认自动探测 `../backend-java/frontend`，找不到就退化成纯 API 服务）；页面调用的是同源的 `/api/*`。如果前端由 yq-admin 的 web 容器托管在别的端口，跨源请求已由 `CORS_ORIGINS` 放行（默认 `*`）。后端只多了两个只读路由：素材原图 `/api/tasks/{id}/materials/{index}` 与产物本体 `/api/tasks/{id}/artifacts/{aid}`（都只放行数据库里登记过的路径）。
 
 ## 目录里的 Java 代码是什么
 
@@ -126,7 +128,6 @@ Multi-agent-video-workflow/
 │   │   ├── publish/           发布适配（dry-run 发布单 / webhook）
 │   │   └── api.py, main.py    FastAPI 接口层
 │   ├── scripts/               demo / serve / smoke / 诊断脚本
-│   ├── web/                   前端（index.html + app.css + app.js）
 │   ├── reference/mpt/         渲染层原始参考实现
 │   ├── sql/schema.sql         管线库可读快照
 │   ├── output/                运行产物（已 gitignore）
@@ -134,9 +135,10 @@ Multi-agent-video-workflow/
 │   ├── pyproject.toml
 │   └── .env.example
 ├── backend-java/              ← IDEA 打开这一层
-│   └── aimedia-module/
-│       ├── pom.xml            仅为 IDE 索引提供的骨架（见下）
-│       └── src/main/java/com/yanque/aimedia/...
+│   ├── aimedia-module/
+│   │   ├── pom.xml            仅为 IDE 索引提供的骨架（见下）
+│   │   └── src/main/java/com/yanque/aimedia/...
+│   └── frontend/              前端（index.html + app.css + app.js）
 └── docs/                      两边共享的文档
 ```
 
@@ -145,7 +147,7 @@ Multi-agent-video-workflow/
 | 工具 | 打开路径 | 做什么 |
 |------|----------|--------|
 | **PyCharm** | `D:\AGI\Multi-agent-video-workflow\backend-python` | 唯一的运行时。解释器选 `backend-python\.venv\Scripts\python.exe`，源码根 `src` |
-| **IDEA** | `D:\AGI\Multi-agent-video-workflow\backend-java` | 只看 Java 对照代码。打开后 Maven 自动识别 `aimedia-module\pom.xml` |
+| **IDEA** | `D:\AGI\Multi-agent-video-workflow\backend-java` | Java 对照代码 + 前端页面。打开后 Maven 自动识别 `aimedia-module\pom.xml`，`frontend` 作为静态资源目录 |
 
 两边各自打开子目录，所以 PyCharm 不会去索引 `.java`，IDEA 也不会去索引 Python，虚拟环境与构建缓存互不干扰。
 

@@ -99,6 +99,21 @@ class Settings:
     pipeline_shot_count: int = 4
     pipeline_material_dir: str = ""
 
+    # ---------- 前端 ----------
+    # 前端源码放在 backend-java/frontend，将来跟 yq-admin 的 web 端一起部署；
+    # Python 这边只是本地开发时的静态服务器，留空则自动指向该目录。
+    web_root: str = ""
+    cors_origins: str = "*"
+
+    def web_dir(self) -> Path:
+        """前端静态资源目录，默认取仓库下的 backend-java/frontend。"""
+
+        raw = self.web_root
+        if raw:
+            path = Path(raw)
+            return path if path.is_absolute() else PROJECT_ROOT / path
+        return PROJECT_ROOT.parent / "backend-java" / "frontend"
+
     def storage_root(self) -> Path:
         raw = self.local_storage_root or str(PROJECT_ROOT / "output" / "assets")
         path = Path(raw)
