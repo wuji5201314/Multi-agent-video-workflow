@@ -1,4 +1,4 @@
-﻿/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
+/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
    与后端约定：
    - GET  /api/health
    - GET  /api/tasks
@@ -347,16 +347,22 @@
     }
     var html = '<div class="shot-list">';
     shots.forEach(function (shot, index) {
+      var originText = shot.generated_by === 'nvidia' ? '模型生成' : shot.generated_by === 'manual' ? '指定图片' : shot.generated_by === 'library' ? '素材库' : '占位卡';
+      var originCls = shot.generated_by === 'nvidia' ? 'done' : 'idle';
       html += '<div class="shot">';
       html += '<div class="shot-thumb" style="background-image:url(/api/tasks/' + step.task_id + '/materials/' + index + '?t=' + Date.now() + ')"></div>';
       html += '<div class="shot-fields">';
-      html += '<div class="shot-index">' + esc(shot.need_id || 'N' + (index + 1)) + ' · ' + esc(shot.asset_type || '') + '</div>';
+      html += '<div class="shot-index">' + esc(shot.need_id || 'N' + (index + 1)) + ' <span class="badge ' + originCls + '" style="margin-left:6px">' + esc(originText) + '</span></div>';
       html += '<div class="field" style="margin:0"><label>画面大字</label><input type="text" data-mat="' + index + '" data-field="headline" value="' + esc(shot.headline) + '" /></div>';
-      html += '<div class="field" style="margin:0"><label>素材路径（换成你的真实图片即可）</label><input type="text" data-mat="' + index + '" data-field="image_path" value="' + esc(shot.image_path) + '" /></div>';
+      html += '<div class="field" style="margin:0"><label>出图 prompt</label><textarea data-mat="' + index + '" data-field="image_prompt">' + esc(shot.image_prompt || shot.image_query || '') + '</textarea></div>';
+      html += '<div style="display:flex;gap:8px;align-items:center">';
+      html += '<button class="btn btn-secondary btn-sm" data-regen="' + index + '">用这个 prompt 重新生成</button>';
+      html += '<span class="subtle" style="font-size:12px">' + esc(shot.image_path) + '</span>';
+      html += '</div>';
       html += '</div></div>';
     });
     html += '</div>';
-    html += '<div class="subtle" style="margin-top:12px">改完路径按「带着修改重跑」，管线会用新素材重渲染。</div>';
+    html += '<div class="subtle" style="margin-top:12px">改完 prompt 点「重新生成」只会重跑这一镜，其余镜头复用已有图片，不重复烧额度。</div>';
     return html;
   }
 
@@ -473,6 +479,12 @@
         return;
       }
 
+      var regenBtn = event.target.closest('[data-regen]');
+      if (regenBtn) {
+        regenerateShot(task, step, Number(regenBtn.getAttribute('data-regen')), regenBtn);
+        return;
+      }
+
       var gateBtn = event.target.closest('[data-gate]');
       if (gateBtn) {
         submitGate(task, step, gateBtn.getAttribute('data-gate'));
@@ -544,6 +556,37 @@
       return edit.shots ? { shots: edit.shots } : {};
     }
     return {};
+  }
+
+  function regenerateShot(task, step, index, button) {
+    if (state.busy || !edit.shots || !edit.shots[index]) {
+      return;
+    }
+    // 清掉这一镜的图片路径，后端就会重新调模型；其它镜头保留 image_path 直接复用。
+    edit.shots[index].image_path = '';
+    edit.shots[index].source_url = '';
+    state.busy = true;
+    if (button) {
+      button.disabled = true;
+    }
+    toast('正在重新出图，通常 20–40 秒…');
+    api('/api/tasks/' + task.task_id + '/gates/' + step.code, {
+      method: 'POST',
+      body: { decision: 'edit', note: '重新生成第 ' + (index + 1) + ' 镜', payload: { shots: edit.shots } }
+    })
+      .then(function (next) {
+        state.task = next;
+        syncEditState(next);
+        renderTasks();
+        renderStage();
+        toast('第 ' + (index + 1) + ' 镜已更新');
+      })
+      .catch(function (err) {
+        toast('重新生成失败：' + err.message, true);
+      })
+      .then(function () {
+        state.busy = false;
+      });
   }
 
   function submitGate(task, step, action) {

@@ -53,6 +53,35 @@ output/publish/publish-<id>-*.json       发布单（标题/文案/标签/成片
 
 决策只有三种：`approve`（通过）/ `edit`（带着修改再跑一遍）/ `reject`（打回重做并作废下游产物）。
 
+## 用到了哪些模型
+
+| 环节 | 模型 | 接口 | 配置键 |
+|------|------|------|--------|
+| 选题 / 分镜口播 / 配图描述 | `deepseek-ai/deepseek-v4.1-flash` | NVIDIA NIM `POST /v1/chat/completions` | `BASE_URL` `API_KEY` `LLM_MODEL` |
+| 镜头配图 | `black-forest-labs/flux-3-image-klein` | NVIDIA NIM `POST /v1/genai/{model}` | `IMAGE_PROVIDER=nvidia` `IMAGE_API_KEY` `IMAGE_MODEL` |
+| 配音 | edge-tts（微软神经 TTS，带词级时间轴） | 本地库 | `MEDIA_RENDER_TTS_*` |
+| 字幕 | ASS + libass | ffmpeg 烧录 | `MEDIA_RENDER_SUBTITLE_*` |
+| 组装 | ffmpeg（Ken Burns / concat / 混音） | imageio-ffmpeg 自带二进制 | `MEDIA_RENDER_*` |
+
+素材准备是**三级回退**（`pipeline/service.py` 的 `_step_material`）：
+
+```
+人工指定的 image_path → 本地素材库 PIPELINE_MATERIAL_DIR → 模型出图 → Pillow 占位卡
+```
+
+只有同时没配 key、没素材目录时才用占位卡，所以「离线也能跑通」和「接模型出真图」是同一套代码。
+
+### 出图的两个坑
+
+1. **比例**：flux 的 `aspect_ratio` 合法值里没有 `9:16`（只有 `9:21 / 1:2 / 2:3 / 3:4 / 1:1 / 4:3 ...`）。代码用 `1:2` 生成，再由 `generate/nvidia.py` 的 `cover_resize` 等比缩放后居中裁成 1080×1920，画面不变形。
+2. **文字**：flux 画中文 UI 会得到满屏伪汉字。所以 prompt 里硬性要求「实拍照片，不要界面/截图/文字」；`_material_prompt` 还会把含「界面 / 按钮 / 截图 / 进度条」的描述自动改写成实拍隐喻。文案侧的 `image_query` 也在 prompt 里被约束成「只写人物、场景、物件、光线、景别」。
+
+### 视频模型现状
+
+`wan2.2-animate-2-14b` 目前**调不通**：`POST https://ai.api.nvidia.com/v1/genai/wan-ai/wan2.2-animate-2-14b` 返回 404（换成 `integrate.api.nvidia.com`、`/v1/video/generations` 等路径同样 404），说明这个 key 的账号还没对该模型开通 API。另外它本身是 **video editing（图+动作视频 → 动画）**，不是文生视频。
+
+在开通之前，镜头的动态由 ffmpeg 的 Ken Burns 推拉平移提供（`compose.py` 的 `render_image_clip`）。
+
 ## 前端工作台（backend-java/frontend/）
 
 起服务后直接打开 <http://127.0.0.1:8010/>，就是一个 Apple 风格的单页工作台：左边任务列表，右边步骤进度 + 当前步骤产出 + GATE 操作条。
@@ -176,5 +205,5 @@ Git Bash 与 cmd 里直接用原生 `git` 即可，不再需要包装脚本。�
 ## 边界
 
 - 发布只到「发布单」：抖音/小红书真实上传要 Cookie 与分片上传，扩展点已留在 `publish/adapters.py`；
-- 素材来源默认占位卡；把 `PIPELINE_MATERIAL_DIR` 指向你的 AI 出图目录即可换成真图；
+- 素材优先顺序：人工指定 → `PIPELINE_MATERIAL_DIR` 素材目录 → 模型出图（`IMAGE_PROVIDER=nvidia`）→ Pillow 占位卡；
 - 素材库/图片生成的在线供应商（pexels、seedance 等）未接入，接口位置在 `pipeline/service.py` 的 `_step_material`。

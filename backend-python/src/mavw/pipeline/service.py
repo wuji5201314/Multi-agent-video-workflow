@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 from ..config import Settings
+from ..generate import MaterialSpec, build_provider
 from ..llm import ContentWriter, Script, Shot, Topic
 from ..publish.adapters import build_adapters
 from ..render.card import render_material_card
@@ -29,6 +30,33 @@ from ..render.models import RenderItem, RenderRequest, RenderResult
 from .steps import GATES, STEP_ORDER, STEP_TITLES, Step, StepStatus, TaskStatus
 
 logger = logging.getLogger(__name__)
+
+# 模型出图时补上的画风约束：实拍照片、竖屏、不留文字（大字与字幕由渲染层叠加）。
+_IMAGE_STYLE_HINT = (
+    "实拍照片（不是截图、不是界面、不是图标、不是插画），竖屏 9:16 构图，自然光，浅景深，"
+    "画面里不要出现任何文字、字母、水印或 logo"
+)
+
+# flux 画中文 UI 会得到满屏伪字，所以描述里出现这些词就改写成实拍隐喻。
+_SCREEN_WORDS = (
+    "界面", "截图", "屏幕", "按钮", "弹窗", "菜单", "图标", "列表", "进度条",
+    "UI", "ui", "APP", "app", "App", "表格", "图表",
+)
+
+
+def _material_prompt(shot: dict[str, Any], brief: str) -> str:
+    """把镜头里的画面描述扩成可直接出图的 prompt。"""
+
+    base = str(shot.get("image_query") or "").strip() or str(shot.get("headline") or "").strip()
+    if not base:
+        base = f"{brief} 相关场景"
+    if any(word in base for word in _SCREEN_WORDS):
+        base = (
+            f"{base}；改用实拍方式呈现：人手、设备与真实环境同框，"
+            "屏幕内容不作为画面主体、不留可读文字"
+        )
+    return f"{base}。{_IMAGE_STYLE_HINT}"
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
@@ -391,32 +419,43 @@ class PipelineService:
         }
 
     async def _step_material(self, task: dict[str, Any]) -> dict[str, Any]:
+        """为每个镜头准备一张图：人工指定的优先，其次本地素材库，最后交给出图 provider。"""
+
         script = self._payload(task, Step.SCRIPT).get("script") or {}
         shots = list(script.get("shots") or [])
+        tags = tuple(script.get("tags") or [])
         previous = self._payload(task, Step.MATERIAL).get("shots") or []
         override = {item.get("index"): item for item in previous if item.get("index") is not None}
         library = self._material_library()
         task_dir = self._settings.output_dir() / "assets" / "materials" / f"task-{task['task_id']}"
         task_dir.mkdir(parents=True, exist_ok=True)
+        provider = build_provider(self._settings)
         items: list[dict[str, Any]] = []
         for index, shot in enumerate(shots):
             chosen = override.get(index, {})
             image_path = chosen.get("image_path")
+            prompt = str(chosen.get("image_prompt") or _material_prompt(shot, task["brief"])).strip()
             if image_path and Path(image_path).is_file():
+                # 人工指定过、或上一轮已定稿的图直接复用，不重复烧模型额度。
                 path = Path(image_path)
+                source = "manual"
             elif library:
                 path = library[index % len(library)]
+                source = "library"
             else:
-                # 没有现成配图时用 Pillow 生成占位素材卡，保证链路完整可跑。
                 path = task_dir / f"shot-{index:02d}.png"
-                path.write_bytes(
-                    render_material_card(
-                        str(shot.get("headline") or ""),
-                        "",
-                        index + 1,
-                        script.get("tags") or [],
-                    )
+                spec = MaterialSpec(
+                    index=index,
+                    prompt=prompt,
+                    headline=str(shot.get("headline") or ""),
+                    body=str(shot.get("body") or ""),
+                    tags=tags,
+                    width=self._settings.media_render_width,
+                    height=self._settings.media_render_height,
+                    seed=self._settings.image_seed,
                 )
+                path = await provider.generate(spec, path)
+                source = provider.name
             items.append(
                 {
                     "index": index,
@@ -428,6 +467,8 @@ class PipelineService:
                     "body": shot.get("body", ""),
                     "duration_ms": shot.get("duration_ms"),
                     "image_query": shot.get("image_query", ""),
+                    "image_prompt": prompt,
+                    "generated_by": source,
                 }
             )
         return {"shots": items}

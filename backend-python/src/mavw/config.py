@@ -7,7 +7,12 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# 允许把配置写进 backend-python/.env（该文件在 .gitignore 里），进程启动时自动读取。
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 def _str(name: str, default: str) -> str:
@@ -86,10 +91,14 @@ class Settings:
     yanque_internal_api_key: str = ""
 
     # ---------- 大模型（缺 key 时自动退回内置模板，保证离线可跑） ----------
-    base_url: str = "https://api.siliconflow.cn/v1"
+    base_url: str = "https://integrate.api.nvidia.com/v1"
     api_key: str = ""
-    llm_model: str = "deepseek-ai/DeepSeek-V4-Flash"
-    llm_timeout_seconds: int = 120
+    llm_model: str = "deepseek-ai/deepseek-v4.1-flash"
+    llm_timeout_seconds: int = 180
+    # 推理型模型的思考过程也吃 token，给足才不会出现 content 为空。
+    llm_max_tokens: int = 3000
+    # NIM 上的 deepseek 开 json_object 会把结果写进 reasoning_content，默认关掉。
+    llm_json_mode: bool = False
 
     # ---------- 管线 ----------
     pipeline_db_path: str = ""
@@ -99,11 +108,29 @@ class Settings:
     pipeline_shot_count: int = 4
     pipeline_material_dir: str = ""
 
+    # ---------- 素材生成（模型出图） ----------
+    # provider: nvidia=调用 NVIDIA NIM 的 flux 出图；placeholder=Pillow 排版卡兜底
+    image_provider: str = "placeholder"
+    image_api_base: str = "https://ai.api.nvidia.com/v1/genai"
+    image_api_key: str = ""
+    image_model: str = "black-forest-labs/flux-3-image-klein"
+    # flux 支持的宽高比里没有 9:16，1:2 最接近（生成后统一裁成 9:16）
+    image_aspect_ratio: str = "1:2"
+    image_timeout_seconds: int = 180
+    image_retries: int = 3
+    # 同一 prompt 固定 seed 便于复现；0 表示每次随机
+    image_seed: int = 0
+
     # ---------- 前端 ----------
     # 前端源码放在 backend-java/frontend，将来跟 yq-admin 的 web 端一起部署；
     # Python 这边只是本地开发时的静态服务器，留空则自动指向该目录。
     web_root: str = ""
     cors_origins: str = "*"
+
+    def images_dir(self) -> Path:
+        """模型出图的落盘目录，跟随 output 一起被忽略。"""
+
+        return self.output_dir() / "assets" / "materials"
 
     def web_dir(self) -> Path:
         """前端静态资源目录，默认取仓库下的 backend-java/frontend。"""
@@ -169,10 +196,20 @@ def get_settings() -> Settings:
         ),
         yanque_admin_base_url=_str("YANQUE_ADMIN_BASE_URL", "http://127.0.0.1:8080"),
         yanque_internal_api_key=_str("YANQUE_INTERNAL_API_KEY", ""),
-        base_url=_str("BASE_URL", "https://api.siliconflow.cn/v1"),
+        base_url=_str("BASE_URL", "https://integrate.api.nvidia.com/v1"),
         api_key=_str("API_KEY", ""),
-        llm_model=_str("LLM_MODEL", "deepseek-ai/DeepSeek-V4-Flash"),
-        llm_timeout_seconds=_int("LLM_TIMEOUT_SECONDS", 120),
+        llm_model=_str("LLM_MODEL", "deepseek-ai/deepseek-v4.1-flash"),
+        llm_timeout_seconds=_int("LLM_TIMEOUT_SECONDS", 180),
+        llm_max_tokens=_int("LLM_MAX_TOKENS", 3000),
+        llm_json_mode=_bool("LLM_JSON_MODE", False),
+        image_provider=_str("IMAGE_PROVIDER", "placeholder"),
+        image_api_base=_str("IMAGE_API_BASE", "https://ai.api.nvidia.com/v1/genai"),
+        image_api_key=_str("IMAGE_API_KEY", ""),
+        image_model=_str("IMAGE_MODEL", "black-forest-labs/flux-3-image-klein"),
+        image_aspect_ratio=_str("IMAGE_ASPECT_RATIO", "1:2"),
+        image_timeout_seconds=_int("IMAGE_TIMEOUT_SECONDS", 180),
+        image_retries=_int("IMAGE_RETRIES", 3),
+        image_seed=_int("IMAGE_SEED", 0),
         pipeline_db_path=_str("PIPELINE_DB_PATH", ""),
         pipeline_output_dir=_str("PIPELINE_OUTPUT_DIR", ""),
         pipeline_auto_approve=_bool("PIPELINE_AUTO_APPROVE", False),

@@ -79,10 +79,16 @@ class ContentWriter:
             f"主题：{brief}\n选题：{topic.title}（角度：{topic.angle}）\n"
             f"请写一支 {shot_count} 个镜头的竖屏口播短视频脚本，每个镜头 2-4 句口语短句。\n"
             + (f"用户补充要求：{note}\n" if note else "")
-            + "注意：headline 是画面上的大字标题，会单独显示；body 是配音与字幕的稿子，"
-            "**不要复述 headline**（不要用同一个开头或同义句重说一遍），要接着往下讲。\n"
+            + "注意三类要求：\n"
+            "1) headline 是画面上的大字标题，会单独显示；body 是配音与字幕的稿子，"
+            "不要复述 headline（不要用同一个开头或同义句重说一遍），要接着往下讲。\n"
+            "2) image_query 会直接交给文生图模型：必须是**实拍照片**的画面描述，只写人物、场景、物件、"
+            "光线、景别；严禁写手机或电脑屏幕内容、APP 界面、截图、按钮、图表、字幕条，"
+            "也不要要求画面里出现任何文字（模型写中文会变成乱码）。\n"
+            "3) 各镜头的 image_query 必须明显不同：换场景、换景别（特写/中景/远景）、换主体，避免几张图长得一样。\n"
             + '返回 JSON：{"title":"标题","cover_title":"封面大字≤14字","caption":"发布文案","tags":["标签1","标签2","标签3"],'
-            '"shots":[{"headline":"画面大字≤14字","body":"该镜头口播1-2句，不得复述headline","image_query":"配图画面描述"}]}'
+            '"shots":[{"headline":"画面大字≤14字","body":"该镜头口播1-2句，不得复述headline",'
+            '"image_query":"实拍照片描述，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深特写"}]}'
         )
         data = await self._chat(prompt)
         parsed = _parse_script(data) if data else None
@@ -93,15 +99,17 @@ class ContentWriter:
         if not self._settings.api_key:
             return None
         url = f"{self._settings.base_url.rstrip('/')}/chat/completions"
-        payload = {
+        payload: dict = {
             "model": self._settings.llm_model,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.8,
-            "response_format": {"type": "json_object"},
+            "max_tokens": self._settings.llm_max_tokens,
         }
+        if self._settings.llm_json_mode:
+            payload["response_format"] = {"type": "json_object"}
         headers = {"Authorization": f"Bearer {self._settings.api_key}"}
         try:
             async with httpx.AsyncClient(
@@ -110,11 +118,26 @@ class ContentWriter:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 body = response.json()
-            content = (((body.get("choices") or [{}])[0].get("message") or {}).get("content")) or ""
-            return json.loads(_strip_code_fence(content))
+            message = ((body.get("choices") or [{}])[0].get("message") or {})
+            content = str(message.get("content") or "").strip()
+            if not content:
+                # deepseek-v4.1-flash 这类推理模型在个别参数下会把答案写进 reasoning_content。
+                content = str(message.get("reasoning_content") or "").strip()
+            return json.loads(_extract_json(content))
         except Exception as exc:  # noqa: BLE001 - 大模型不可用时必须能退化
             logger.warning("大模型调用失败，改用内置模板：%s", exc)
             return None
+
+
+def _extract_json(text: str) -> str:
+    """模型偶尔会在 JSON 前后加解释，取最外层的一对花括号。"""
+
+    cleaned = _strip_code_fence(text)
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end > start:
+        return cleaned[start : end + 1]
+    return cleaned
 
 
 def _strip_code_fence(text: str) -> str:
