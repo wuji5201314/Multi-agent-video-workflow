@@ -1,31 +1,96 @@
-# Python
+# ================= Python =================
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.eggs/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .venv/
 venv/
+env/
+ENV/
+build/
+dist/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+.python-version
 
-# 本地环境与密钥（.env.example 会提交，真实 .env 不提交）
+# ================= 环境变量与密钥 =================
+# 真实 .env 一律不提交；.env.example 是模板，必须提交
 .env
-.env.local
+.env.*
+!.env.example
 *.pem
+*.key
 *.p12
+*.pfx
+secrets.json
+credentials.json
 
-# 运行产物：数据库、成片、素材、诊断帧
+# ================= 运行产物 =================
 output/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+logs/
+*.tmp
+*.bak
+*.orig
+*.rej
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.flac
 
-# IDE
+# ================= 模型权重 =================
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+models/
+weights/
+
+# 依赖锁文件（uv.lock / poetry.lock / requirements.lock）应当提交，不要忽略
+
+# ================= IDE / 编辑器 =================
 .idea/
 *.iml
 *.ipr
 *.iws
+.vscode/
+*.swp
+*.swo
+*~
 
-# 系统
+# ================= AI 工具配置 =================
+.claude/
+.cursor/
+.cursorrules
+.aider*
+
+# ================= 系统 =================
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
-.idea/
+
+# ================= 打包与备份 =================
+*.zip
+*.tar.gz
+*.bundle
+
+# ================= 例外：文档要用的图 =================
+!docs/screenshots/*.png
