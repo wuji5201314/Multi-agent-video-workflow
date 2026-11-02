@@ -47,14 +47,9 @@
 
   var TOOLS = {
     'image-generate': {
-      name: '文生图', sub: '基础出图', icon: 'image', ready: true, mode: 'generate', tone: 'blue',
-      desc: '写一句描述生成图片，可调尺寸、画风、质量与张数。',
-      tags: ['已接通', 'flux']
-    },
-    'image-remix': {
-      name: '参考图重绘', sub: '图生图', icon: 'remix', ready: true, mode: 'remix', tone: 'purple',
-      desc: '上传一张图，先读成提示词，再按新风格重新画出来。',
-      tags: ['已接通', 'vision']
+      name: '图片生成', sub: '文生图 · 参考图重绘', icon: 'image', ready: true, mode: 'generate', tone: 'blue',
+      desc: '写描述直接出图；上传一张参考图，会先读懂画面再按新要求重画。',
+      tags: ['已接通', 'flux', 'vision']
     },
     'video-pipeline': {
       name: '智能成片', sub: '新手入口', icon: 'video', ready: true, mode: 'video', tone: 'green',
@@ -125,18 +120,17 @@
       desc: '已经接通的功能排在前面，其余功能陆续开放。',
       notice: '生成结果都会进「历史记录」，图片可直接下载。',
       groups: [
-        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'image-remix', 'video-pipeline'] },
-        { name: '即将上线', accent: '#66666f', tools: ['cover', 'voice-tts', 'subtitle', 'copy-detail'] }
+        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'video-pipeline'] },
+        { name: '即将上线', accent: '#c7c7cc', tools: ['cover', 'voice-tts', 'subtitle', 'copy-detail'] }
       ]
     },
     image: {
       crumb: ['全部分类', '图片创作'],
       title: '图片创作',
       desc: '从文字或参考图出发，生成可直接使用的图片与封面。',
-      notice: '图片按张计费，一次最多 4 张；固定随机种子可复现同一张。',
+      notice: '图片按张计费，一次最多 4 张；上传参考图即切换为重绘，固定种子可复现同一张。',
       groups: [
         { name: '生成', accent: '#0a84ff', tools: ['image-generate'] },
-        { name: '编辑与重绘', accent: '#bf5af2', tools: ['image-remix'] },
         { name: '封面与投放', accent: '#ff9f0a', tools: ['cover'] }
       ]
     },
@@ -331,7 +325,13 @@
     }
   }
 
-  function openTool(toolKey) {
+  // 旧链接兼容：参考图重绘已并入图片生成
+  function normalizeTool(toolKey) {
+    return toolKey === 'image-remix' ? 'image-generate' : toolKey;
+  }
+
+  function openTool(rawKey) {
+    var toolKey = normalizeTool(rawKey);
     var tool = TOOLS[toolKey];
     if (!tool) { return; }
     if (!tool.ready) {
@@ -349,13 +349,12 @@
     el('panel-title').textContent = tool.name;
     el('panel-desc').textContent = tool.desc;
     el('tool-eyebrow').textContent = tool.name;
-    var isRemix = tool.mode === 'remix';
-    el('ref-group').hidden = !isRemix;
-    el('f-prompt').placeholder = isRemix
+    el('ref-group').hidden = false;
+    el('f-prompt').placeholder = state.reference
       ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
       : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
-    el('btn-generate').textContent = isRemix ? '重绘图片' : '生成图片';
-    renderSamples(isRemix);
+    renderSamples();
+    updatePromptMode();
     switchView('studio');
   }
 
@@ -432,11 +431,22 @@
     ]
   };
 
-  function renderSamples(isRemix) {
-    var list = SAMPLES[isRemix ? 'remix' : 'generate'];
+  function renderSamples() {
+    var list = state.reference ? SAMPLES.remix : SAMPLES.generate;
     el('f-samples').innerHTML = list.map(function (text) {
       return '<button class="sample-chip" data-sample="' + esc(text) + '">' + esc(text) + '</button>';
     }).join('');
+  }
+
+  // 参考图决定当前是"文生图"还是"按图重绘"，提示词与按钮都跟着变
+  function updatePromptMode() {
+    var hasRef = !!state.reference;
+    var button = el('btn-generate');
+    if (!state.busy) { button.textContent = hasRef ? '按参考图重绘' : '生成图片'; }
+    el('f-prompt').placeholder = hasRef
+      ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
+      : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
+    renderSamples();
   }
 
   function loadOptions() {
@@ -517,6 +527,7 @@
         el('ref-actions').hidden = false;
         el('ref-note').hidden = true;
         el('gen-status').textContent = '参考图已就绪，生成时会先识别再重绘';
+        updatePromptMode();
       })
       .catch(function (err) {
         el('gen-status').textContent = '';
@@ -534,6 +545,7 @@
     el('ref-note').hidden = true;
     el('f-file').value = '';
     el('gen-status').textContent = '';
+    updatePromptMode();
   }
 
   function analyzeReference() {
@@ -569,10 +581,6 @@
       el('f-prompt').focus();
       return;
     }
-    if (state.tool === 'image-remix' && !state.reference) {
-      toast('参考图重绘需要先上传一张图', true);
-      return;
-    }
     var body = {
       prompt: prompt,
       negative_prompt: (el('f-negative').value || '').trim(),
@@ -582,7 +590,7 @@
       count: state.count,
       model: state.model,
       seed: Number(el('f-seed').value) || 0,
-      reference: state.tool === 'image-remix' ? state.reference : ''
+      reference: state.reference
     };
 
     state.busy = true;
@@ -607,7 +615,7 @@
       .then(function () {
         state.busy = false;
         button.disabled = false;
-        button.textContent = state.tool === 'image-remix' ? '重绘图片' : '生成图片';
+        updatePromptMode();
         el('gen-status').textContent = '';
       });
   }
@@ -783,7 +791,7 @@
     });
 
     renderCategory('home');
-    renderSamples(false);
+    renderSamples();
     loadOptions();
     loadHistory();
 
