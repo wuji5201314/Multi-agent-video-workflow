@@ -302,6 +302,153 @@
     for (var i = 0; i < items.length; i += 1) {
       items[i].classList.toggle('active', items[i].getAttribute('data-cat') === catKey);
     }
+
+    // 首页额外渲染概览统计与最近作品
+    if (catKey === 'home') {
+      renderHomeStats();
+      loadHomeRecent();
+    }
+  }
+
+  /* ---------------- 首页：概览 + 最近作品 ---------------- */
+  function statCell(num, label, accent, jump) {
+    var cls = 'home-stat' + (jump ? ' clickable' : '');
+    var attr = jump ? ' data-cat-jump="' + esc(jump) + '"' : '';
+    var numCls = accent ? ' hs-accent' : '';
+    return '<div class="' + cls + '"' + attr + '>' +
+      '<div class="hs-num' + numCls + '">' + esc(String(num)) + '</div>' +
+      '<div class="hs-label">' + esc(label) + '</div>' +
+      '</div>';
+  }
+
+  function renderHomeStats() {
+    var wrap = el('home-stats');
+    if (!wrap) { return; }
+    // 先占位，异步填充真实数字
+    wrap.innerHTML = statCell('—', '图片作品', true, 'image') +
+      statCell('—', '视频任务', true, 'video') +
+      statCell('—', '配音片段', false, 'audio') +
+      statCell('—', '字幕稿', false, 'subtitle');
+    Promise.all([
+      api('/api/images/history?limit=200').catch(function () { return []; }),
+      api('/api/tasks?limit=200').catch(function () { return []; }),
+      api('/api/audio/history?limit=200').catch(function () { return []; }),
+      api('/api/subtitle/history?limit=200').catch(function () { return []; })
+    ]).then(function (res) {
+      var imgs = (res[0] || []).length;
+      var tasks = (res[1] || []).length;
+      var audios = (res[2] || []).length;
+      var subs = (res[3] || []).length;
+      wrap.innerHTML = statCell(imgs, '图片作品', true, 'image') +
+        statCell(tasks, '视频任务', true, 'video') +
+        statCell(audios, '配音片段', false, 'audio') +
+        statCell(subs, '字幕稿', false, 'subtitle');
+    });
+  }
+
+  function timeAgo(str) {
+    if (!str) { return ''; }
+    var t = new Date(String(str).replace(/-/g, '/')).getTime();
+    if (isNaN(t)) { return ''; }
+    var diff = Math.max(0, Date.now() - t) / 1000;
+    if (diff < 60) { return '刚刚'; }
+    if (diff < 3600) { return Math.floor(diff / 60) + ' 分钟前'; }
+    if (diff < 86400) { return Math.floor(diff / 3600) + ' 小时前'; }
+    return Math.floor(diff / 86400) + ' 天前';
+  }
+
+  var STATUS_TEXT = { WAITING_INPUT: '待你确认', RUNNING: '进行中', DONE: '已完成', FAILED: '失败' };
+
+  function loadHomeRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    Promise.all([
+      api('/api/images/history?limit=8').catch(function () { return []; }),
+      api('/api/tasks?limit=8').catch(function () { return []; })
+    ]).then(function (res) {
+      var items = [];
+      (res[0] || []).forEach(function (row) {
+        items.push({ kind: 'image', ts: row.created_at, row: row });
+      });
+      (res[1] || []).forEach(function (row) {
+        items.push({ kind: 'task', ts: row.updated_at || row.created_at, row: row });
+      });
+      items.sort(function (a, b) {
+        var ta = new Date(String(a.ts || '').replace(/-/g, '/')).getTime() || 0;
+        var tb = new Date(String(b.ts || '').replace(/-/g, '/')).getTime() || 0;
+        return tb - ta;
+      });
+      items = items.slice(0, 8);
+      if (!items.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有作品。点下面任意功能做一个，成品会出现在这里。</div>';
+        if (hint) { hint.textContent = ''; }
+        return;
+      }
+      if (hint) {
+        hint.innerHTML = '共 ' + items.length + ' 件 · <a href="javascript:void 0" data-cat-jump="image">看全部图片</a>';
+      }
+      wrap.innerHTML = items.map(function (item) {
+        if (item.kind === 'image') {
+          var r = item.row;
+          return '<button class="hr-card" data-open-image="' + esc(r.id) + '">' +
+            '<div class="hr-thumb"><img loading="lazy" src="' + esc(r.url) + '" alt="">' +
+            '<span class="hr-badge">图片</span></div>' +
+            '<div class="hr-body"><div class="hr-title">' + esc((r.prompt || '文生图作品').slice(0, 40)) + '</div>' +
+            '<div class="hr-meta">' + esc(r.width + '×' + r.height) + ' · ' + esc(timeAgo(r.created_at)) + '</div></div>' +
+            '</button>';
+        }
+        var t = item.row;
+        var label = STATUS_TEXT[t.status] || t.status || '';
+        var badgeCls = ' hr-badge-' + String(t.status || '').toLowerCase();
+        return '<button class="hr-card" data-open-task="' + esc(String(t.id)) + '">' +
+          '<div class="hr-thumb hr-thumb-video"><div class="hr-play">▶</div>' +
+          '<span class="hr-badge' + badgeCls + '">' + esc(label) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((t.brief || '视频任务').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">任务 #' + esc(String(t.id)) + ' · ' + esc(timeAgo(t.updated_at || t.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function bindHome() {
+    var wrap = el('home-recent');
+    if (!wrap) { return; }
+    wrap.addEventListener('click', function (event) {
+      var imgBtn = event.target.closest('[data-open-image]');
+      if (imgBtn) {
+        var id = imgBtn.getAttribute('data-open-image');
+        var row = null;
+        for (var i = 0; i < historyRows.length; i += 1) {
+          if (String(historyRows[i].id) === String(id)) { row = historyRows[i]; break; }
+        }
+        if (!row) {
+          api('/api/images/history?limit=200').then(function (rows) {
+            historyRows = rows || [];
+            var found = null;
+            for (var k = 0; k < historyRows.length; k += 1) {
+              if (String(historyRows[k].id) === String(id)) { found = historyRows[k]; break; }
+            }
+            if (found) { openLightbox(found); }
+          }).catch(function () {});
+          return;
+        }
+        openLightbox(row);
+        return;
+      }
+      var taskBtn = event.target.closest('[data-open-task]');
+      if (taskBtn) {
+        switchView('video');
+        if (window.__videoBoot) { window.__videoBoot(); }
+        var tid = taskBtn.getAttribute('data-open-task');
+        // 延迟一点让视频视图完成渲染后打开任务
+        setTimeout(function () {
+          var node = document.querySelector('#task-list [data-task="' + tid + '"]');
+          if (node) { node.click(); }
+        }, 300);
+      }
+    });
   }
 
   /* ---------------- 视图切换 ---------------- */
@@ -1130,6 +1277,22 @@
       if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
     });
 
+    // 首页概览卡片 / 最近作品标题里的分类跳转
+    var statsEl = el('home-stats');
+    if (statsEl) {
+      statsEl.addEventListener('click', function (event) {
+        var jump = event.target.closest('[data-cat-jump]');
+        if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
+      });
+    }
+    var hintEl = el('home-recent-hint');
+    if (hintEl) {
+      hintEl.addEventListener('click', function (event) {
+        var jump = event.target.closest('[data-cat-jump]');
+        if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
+      });
+    }
+
     el('group-list').addEventListener('click', function (event) {
       var card = event.target.closest('[data-tool]');
       if (card) { openTool(card.getAttribute('data-tool')); }
@@ -1153,6 +1316,7 @@
 
   function boot() {
     bindNav();
+    bindHome();
     bindDropzone();
     bindGallery();
     bindAudioWorkspace();
