@@ -149,6 +149,24 @@ class Settings:
     # 看图写词用的视觉模型（上传参考图后先描述再重绘）
     vision_model: str = "meta/llama-3.2-90b-vision-instruct"
 
+    # ---------- MPT（MoneyPrinterTurbo）能力引擎，可选 ----------
+    # 把 vendor/MoneyPrinterTurbo 作为子进程拉起，通过其 HTTP API 借用
+    # 素材搜索 / 多模型脚本 / TTS 等能力。关闭时整条链路与原来完全一致。
+    mpt_enabled: bool = False
+    mpt_base_url: str = "http://127.0.0.1:8020"
+    # vendor 目录（仓库根下 vendor/MoneyPrinterTurbo），留空自动推导
+    mpt_vendor_dir: str = ""
+    # 用哪个 python 起 MPT（默认与本进程相同的解释器）
+    mpt_python: str = ""
+    mpt_port: int = 8020
+    mpt_start_timeout_seconds: int = 60
+    mpt_request_timeout_seconds: int = 600
+    # 探活类调用（脚本生成/试连）的快速失败超时：MPT 不可用时尽快回退本地引擎，
+    # 避免因 MPT 内部多次重试把 SCRIPT 步骤卡上几十秒。
+    mpt_probe_timeout_seconds: int = 20
+    # MPT 的 config.toml 里若设置了 api_key，这里填对应值（空则免认证）
+    mpt_api_key: str = ""
+
     # ---------- 前端 ----------
     # 前端源码放在 backend-java/frontend，将来跟 yq-admin 的 web 端一起部署；
     # Python 这边只是本地开发时的静态服务器，留空则自动指向该目录。
@@ -191,6 +209,14 @@ class Settings:
             path = Path(self.digital_human_cache_dir)
             return path if path.is_absolute() else PROJECT_ROOT / path
         return self.output_dir() / "digital-human-cache"
+
+    def mpt_vendor(self) -> Path:
+        """vendor 下的 MoneyPrinterTurbo 目录，默认取仓库根 vendor/。"""
+
+        if self.mpt_vendor_dir:
+            path = Path(self.mpt_vendor_dir)
+            return path if path.is_absolute() else PROJECT_ROOT / path
+        return PROJECT_ROOT.parent / "vendor" / "MoneyPrinterTurbo"
 
 
 @lru_cache(maxsize=1)
@@ -272,4 +298,13 @@ def get_settings() -> Settings:
         pipeline_topic_candidates=_int("PIPELINE_TOPIC_CANDIDATES", 3),
         pipeline_shot_count=_int("PIPELINE_SHOT_COUNT", 4),
         pipeline_material_dir=_str("PIPELINE_MATERIAL_DIR", ""),
+        mpt_enabled=_bool("MAVW_MPT_ENABLED", False),
+        mpt_base_url=_str("MAVW_MPT_BASE_URL", "http://127.0.0.1:8020"),
+        mpt_vendor_dir=_str("MAVW_MPT_VENDOR_DIR", ""),
+        mpt_python=_str("MAVW_MPT_PYTHON", ""),
+        mpt_port=_int("MAVW_MPT_PORT", 8020),
+        mpt_start_timeout_seconds=_int("MAVW_MPT_START_TIMEOUT_SECONDS", 60),
+        mpt_request_timeout_seconds=_int("MAVW_MPT_REQUEST_TIMEOUT_SECONDS", 600),
+        mpt_probe_timeout_seconds=_int("MAVW_MPT_PROBE_TIMEOUT_SECONDS", 20),
+        mpt_api_key=_str("MAVW_MPT_API_KEY", ""),
     )

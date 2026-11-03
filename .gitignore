@@ -110,3 +110,10 @@ backend-java/aimedia-module/target/
 backend-java/frontend/node_modules/
 backend-java/frontend/dist/
 
+
+# MPT vendored module runtime artifacts
+vendor/MoneyPrinterTurbo/.venv/
+vendor/MoneyPrinterTurbo/config.toml
+vendor/MoneyPrinterTurbo/storage/
+vendor/MoneyPrinterTurbo/__pycache__/
+backend-python/output/

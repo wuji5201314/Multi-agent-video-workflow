@@ -41,6 +41,42 @@
 >   - 在 IDEA 里跑：运行配置已带 `-Dspring.profiles.active=launcher`；若 IDE 直接 Make 报全量编译错，请在 Maven 面板勾选 `launcher` profile 只编译启动器。
 > - 端口约定：Python `8010`、aimedia 启动器 `8088`、前端 dev server `5173`（可选）。
 
+## 可选能力引擎：MoneyPrinterTurbo（MPT）
+
+本项目的"选题/脚本/出片"可以**直接用 MPT 的能力来跑**，也可以**完全不装 MPT**（默认本地引擎，功能齐全）。MPT 是作为 `vendor/MoneyPrinterTurbo` 子模块放进来、通过 HTTP 对接的，主干保留 GATE 中断能力，二者不打架。
+
+- 开关：环境变量 `MAVW_MPT_ENABLED=1` 打开；不设则走本地引擎。
+- 端口：MPT 默认跑在 `8020`（`MAVW_MPT_PORT`），与 Python `8010`、Java `8088` 错开，避免冲突。
+- 解释器：MPT 依赖较重（moviepy / faster-whisper / streamlit 等），**与主 venv 分开**，用 `vendor/MoneyPrinterTurbo/.venv`；通过 `MAVW_MPT_PYTHON` 指向它。
+
+一键准备并启动 MPT：
+
+```powershell
+cd D:\AGI\Multi-agent-video-workflow\vendor\MoneyPrinterTurbo
+# 建独立 venv 并装依赖（清华镜像更快）
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -U pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 手动起 MPT（本项目也会在 MAVW_MPT_ENABLED=1 时按需自动拉起）
+$env:MPT_HOME="$PWD"
+.\.venv\Scripts\python.exe -m uvicorn app.asgi:app --host 127.0.0.1 --port 8020
+```
+
+让 Python 后端用上 MPT：
+
+```powershell
+$env:MAVW_MPT_ENABLED="1"
+$env:MAVW_MPT_PYTHON="D:\AGI\Multi-agent-video-workflow\vendor\MoneyPrinterTurbo\.venv\Scripts\python.exe"
+$env:MAVW_MPT_PORT="8020"
+.\.venv\Scripts\python.exe run.py --port 8010
+```
+
+要点：
+
+- **首次运行 MPT 需在 `vendor/MoneyPrinterTurbo/config.toml` 里配置大模型 key**（如 `deepseek_api_key`、`moonshot_api_key`，并把 `llm_provider` 改成对应值）。未配 key 时 MPT 的 `/scripts` 会返回 503，本项目会**在约 20 秒内快速失败并静默回退到本地引擎**，流程不受影响（`MAVW_MPT_PROBE_TIMEOUT_SECONDS` 控制该超时，默认 20）。
+- 出片走 MPT 时，成片直接从 MPT 任务产物下载落到 `output/assets/materials/task-<id>/mpt-render.mp4`；失败同样自动回退本地 `VideoPreviewRenderer`。
+- `vendor/MoneyPrinterTurbo` 的 `.venv`、`config.toml`、`storage/` 已在 `.gitignore` 忽略，不会误提交。
+
 ## 快速开始
 
 ```powershell
