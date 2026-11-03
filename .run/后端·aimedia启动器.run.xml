@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="后端 · aimedia 启动器 (MavwApplication :8088)" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.yanque.aimedia.MavwApplication" />
+    <module name="aimedia-module" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend-java/aimedia-module" />
+    <option name="VM_PARAMETERS" value="-Dspring.profiles.active=launcher" />
+    <option name="PROGRAM_PARAMETERS" value="" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

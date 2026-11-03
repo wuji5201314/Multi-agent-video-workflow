@@ -104,3 +104,9 @@ mavw-standalone/backend/target/
 mavw-standalone/frontend/node_modules/
 mavw-standalone/frontend/dist/
 
+
+# aimedia-module 构建产物与前端依赖
+backend-java/aimedia-module/target/
+backend-java/frontend/node_modules/
+backend-java/frontend/dist/
+

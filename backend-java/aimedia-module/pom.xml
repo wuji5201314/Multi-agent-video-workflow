@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  aimedia 对照模块的 IDE 骨架。
+  aimedia 模块 pom。
 
-  重要：这不是可独立构建的工程。
-  - com.yanque.common.*（用户上下文、统一响应、异常基类等）来自 yq-admin 父工程，
-    本目录里没有，IDEA 打开时这部分会飘红，属预期。
-  - 依赖版本按 yq-admin（Spring Boot 3 / Jakarta）口径给出，真并入时以父 pom 为准。
+  两种用法：
+  1) 默认（reference 骨架）：`mvn compile` 会把 src/main/java 全部编译。原有 controller
+     依赖 com.yanque.common.*（来自 yq-admin 父工程，此处缺失），因此会出现"飘红/编译失败"，
+     属预期。本模块作为对照代码，真实构建方式是把 src 合并回 yq-admin 对应模块。
 
-  用途：在 IDEA 里单独打开 backend-java/ 时，让 src/main/java 被识别为源码根、能跳转与搜索，
-  不会把 backend-python/ 的 Python 代码一起索引进来。
-
-  真实构建方式：把 aimedia-module/src 合并回 yq-admin 的对应模块。
+  2) 启动器模式（profile: launcher）：`mvn -Plauncher spring-boot:run`
+     只编译 com/yanque/aimedia/MavwApplication.java 与 com/yanque/aimedia/launcher/**，
+     排除依赖缺失 common 的其它包，从而可以独立启动：
+       - 端口 8088（见 application-launcher.properties）
+       - 前端静态页来自 backend-java/frontend（零构建）
+       - /api/** 反代到 Python 渲染引擎（默认 http://127.0.0.1:8010）
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -21,7 +23,7 @@
   <artifactId>aimedia-module</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>jar</packaging>
-  <name>aimedia-module (reference only)</name>
+  <name>aimedia-module</name>
 
   <properties>
     <maven.compiler.source>17</maven.compiler.source>
@@ -83,4 +85,52 @@
       <scope>provided</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <!-- 启动器模式：只编译 MavwApplication + launcher 子包，可独立启动 -->
+    <profile>
+      <id>launcher</id>
+      <build>
+        <finalName>aimedia-launcher</finalName>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.11.0</version>
+            <configuration>
+              <excludes>
+                <!-- 排除依赖缺失 common 的包，只留启动器本身 -->
+                <exclude>com/yanque/aimedia/biz/**</exclude>
+                <exclude>com/yanque/aimedia/common/**</exclude>
+                <exclude>com/yanque/aimedia/config/**</exclude>
+                <exclude>com/yanque/aimedia/controller/**</exclude>
+                <exclude>com/yanque/aimedia/enums/**</exclude>
+                <exclude>com/yanque/aimedia/handler/**</exclude>
+                <exclude>com/yanque/aimedia/mapper/**</exclude>
+                <exclude>com/yanque/aimedia/pojo/**</exclude>
+                <exclude>com/yanque/aimedia/scheduler/**</exclude>
+                <exclude>com/yanque/aimedia/service/**</exclude>
+              </excludes>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-maven-plugin</artifactId>
+            <version>${spring-boot.version}</version>
+            <configuration>
+              <mainClass>com.yanque.aimedia.MavwApplication</mainClass>
+              <addResources>true</addResources>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>repackage</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

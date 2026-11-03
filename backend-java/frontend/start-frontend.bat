@@ -4,16 +4,16 @@ setlocal
 set "HERE=%~dp0"
 
 echo ============================================
-echo  Frontend  (Vite dev server, port 5173)
+echo  前端 (Vite dev server, port 5173)
 echo ============================================
 
 cd /d "%HERE%"
 
 if not exist "node_modules" (
-  echo First run, installing deps...
+  echo 首次运行，安装依赖...
   call npm install
   if errorlevel 1 (
-    echo [ERROR] npm install failed
+    echo [ERROR] npm install 失败
     pause
     exit /b 1
   )

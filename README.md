@@ -20,19 +20,26 @@
 | --- | --- | --- |
 | **后端 · Python 服务 (:8010)** | 起 Python FastAPI 后端（真实能力：出图/TTS/渲染/字幕） | http://127.0.0.1:8010/ |
 | **后端 · Python 开发热重载 (:8010)** | 同上，改代码自动重载（开发用） | http://127.0.0.1:8010/ |
-| **后端 · Java 启动器 (8080)** | 起 Spring Boot 启动器：托管前端静态页 + 把 `/api/**` 反代到 Python | http://127.0.0.1:8080/ |
-| **前端 · 打开页面** | 用 IDE 内置浏览器打开页面 | http://127.0.0.1:8010/ |
-| **合并 · 启动后端并打开页面** | 一次跑起 Python 后端 + 打开浏览器 | http://127.0.0.1:8010/ |
+| **后端 · aimedia 启动器 (MavwApplication :8088)** | 起 Spring Boot 启动器：托管 `backend-java/frontend` 静态页 + 把 `/api/**` 反代到 Python | http://127.0.0.1:8088/ |
+| **前端 · 打开页面** | 用 IDE 内置浏览器打开页面 | http://127.0.0.1:8088/ |
+| **合并 · 启动后端并打开页面** | 一次跑起 Python 后端 + aimedia 启动器 + 打开浏览器 | http://127.0.0.1:8088/ |
 
 **三种启动方式，按需选一：**
 
-- **只想看效果**：跑 `后端 · Python 服务 (:8010)`，浏览器打开 http://127.0.0.1:8010/ 即可（前端由后端静态托管，零构建）。
-- **想走 Java 后端 + 前端**：先跑 `后端 · Python 服务 (:8010)`，再跑 `后端 · Java 启动器 (8080)`，打开 http://127.0.0.1:8080/ 。前端所有 `/api` 请求由 Java 启动器透传到 Python，前端无需改任何地址。
-- **命令行**（不走 IDE）：`cd backend-python` 后 `.\.venv\Scripts\python.exe run.py --port 8010`（或 `scripts\serve.py --port 8010`）。
+- **只想看效果**：跑 `后端 · Python 服务 (:8010)`，浏览器打开 http://127.0.0.1:8010/ 即可（前端由 Python 端静态托管，零构建）。
+- **走 Java 后端 + 前端（推荐标准结构）**：先跑 `后端 · Python 服务 (:8010)`，再跑 `后端 · aimedia 启动器 (MavwApplication :8088)`，打开 http://127.0.0.1:8088/ 。前端所有 `/api` 请求由 Java 启动器透传到 Python，前端无需改任何地址。也可直接双击 `backend-java/aimedia-module/start-backend.bat`。
+- **前端单独热更（可选）**：`cd backend-java/frontend` 后 `npm install && npm run dev`，打开 http://127.0.0.1:5173/ ，Vite 会把 `/api` 代理到 8088。
+- **命令行（只看 Python）**：`cd backend-python` 后 `.\.venv\Scripts\python.exe run.py --port 8010`（或 `scripts\serve.py --port 8010`）。
 
 **首次在 IDEA 打开时若未识别解释器**：`File → Project Structure → SDKs` 添加 `backend-python\.venv\Scripts\python.exe`（Python 3.13），并把项目 SDK 指到它。`.idea` 里已把源码根设为 `backend-python/src`。
 
-> 说明：`backend-java/aimedia-module` 是对照模块，依赖 `yq-admin` 父工程的 `com.yanque.common.*`，**不能独立构建/启动**（IDEA 里飘红属预期）。`backend-java/standalone-launcher` 是与之独立、自包含的 Spring Boot 启动器，专门用来在 IDEA 里一键起 Java 半边并托管前端。
+> **启动器放哪、为什么这样放**：
+> - 后端启动类在 `backend-java/aimedia-module/src/main/java/com/yanque/aimedia/MavwApplication.java`（包内 `launcher/` 下是 Web 配置与 `/api` 反代）。
+> - 前端启动文件在 `backend-java/frontend/`（`package.json` / `vite.config.js` / `start-frontend.bat`）。
+> - `backend-java/aimedia-module` 里的原有 controller/service 依赖 `yq-admin` 父工程的 `com.yanque.common.*`，全量编译会飘红（属预期的"对照代码"）。启动器通过 Maven `launcher` profile 的 compiler `excludes` 只编译 `MavwApplication + launcher/**`，从而可独立打包运行：
+>   - 打包：`backend-java/aimedia-module` 下 `mvn -Plauncher -DskipTests package` → 产出 `target/aimedia-launcher.jar`
+>   - 在 IDEA 里跑：运行配置已带 `-Dspring.profiles.active=launcher`；若 IDE 直接 Make 报全量编译错，请在 Maven 面板勾选 `launcher` profile 只编译启动器。
+> - 端口约定：Python `8010`、aimedia 启动器 `8088`、前端 dev server `5173`（可选）。
 
 ## 快速开始
 

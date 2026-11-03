@@ -1,8 +1,0 @@
-<component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="标准 · 启动全部（Python+Java+前端）" type="CompoundRunConfigurationType">
-    <toRun name="后端 · Python 服务 (:8010)" type="PythonConfigurationType" />
-    <toRun name="标准 · 后端 Java (MavwApplication :8088)" type="Application" />
-    <toRun name="标准 · 前端 npm dev (:5173)" type="js.build_tools.npm" />
-    <method v="2" />
-  </configuration>
-</component>

@@ -1,11 +1,11 @@
 {
-  "name": "mavw-standalone-frontend",
+  "name": "aimedia-frontend",
   "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "description": "Multi-Agent Video Workflow 独立前端（Vite）",
+  "description": "Multi-Agent Video Workflow 前端（零构建静态页，由 aimedia-launcher 或本 dev server 托管）",
   "scripts": {
     "dev": "vite",
+    "serve": "vite --port 5173",
     "build": "vite build",
     "preview": "vite preview"
   },
