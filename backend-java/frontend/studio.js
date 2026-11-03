@@ -303,10 +303,146 @@
       items[i].classList.toggle('active', items[i].getAttribute('data-cat') === catKey);
     }
 
-    // 首页额外渲染概览统计与最近作品
-    if (catKey === 'home') {
-      renderHomeStats();
-      loadHomeRecent();
+    // 概览统计 + 最近作品/分类记录 + 功能入口标题，按分类渲染
+    renderCategoryPanels(catKey);
+  }
+
+  /* ---------------- 分类页：概览 + 作品/记录 + 功能入口 ---------------- */
+  // 每个分类的展示配置：stats 拉哪些数据、recent 展示什么、tools 标题
+  var CAT_PANELS = {
+    home: {
+      toolsTitle: '全部功能',
+      stat: function () {
+        return Promise.all([
+          api('/api/images/history?limit=200').catch(function () { return []; }),
+          api('/api/tasks?limit=200').catch(function () { return []; }),
+          api('/api/audio/history?limit=200').catch(function () { return []; }),
+          api('/api/subtitle/history?limit=200').catch(function () { return []; })
+        ]).then(function (res) {
+          return [
+            { num: (res[0] || []).length, label: '图片作品', accent: true, jump: 'image' },
+            { num: (res[1] || []).length, label: '视频任务', accent: true, jump: 'video' },
+            { num: (res[2] || []).length, label: '配音片段', accent: false, jump: 'audio' },
+            { num: (res[3] || []).length, label: '字幕稿', accent: false, jump: 'subtitle' }
+          ];
+        });
+      },
+      recentTitle: '最近作品',
+      recent: loadHomeRecent
+    },
+    image: {
+      toolsTitle: '图片功能',
+      stat: function () {
+        return api('/api/images/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var ratios = {};
+          var seeds = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            var w = list[i].width || 0, h = list[i].height || 0;
+            ratios[w + '×' + h] = (ratios[w + '×' + h] || 0) + 1;
+          }
+          return [
+            { num: list.length, label: '图片总数', accent: true },
+            { num: Object.keys(ratios).length, label: '尺寸种类', accent: false },
+            { num: list.length ? (list[0].model || '—') : '—', label: '最近模型', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的图片',
+      recent: function () { return loadImageRecent(); }
+    },
+    video: {
+      toolsTitle: '视频功能',
+      stat: function () {
+        return api('/api/tasks?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var done = 0, running = 0, waiting = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            var s = list[i].status;
+            if (s === 'DONE') { done += 1; }
+            else if (s === 'RUNNING') { running += 1; }
+            else if (s === 'WAITING_INPUT') { waiting += 1; }
+          }
+          return [
+            { num: list.length, label: '任务总数', accent: true },
+            { num: done, label: '已完成', accent: false },
+            { num: running + waiting, label: '进行中/待确认', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的视频任务',
+      recent: function () { return loadTaskRecent(); }
+    },
+    audio: {
+      toolsTitle: '声音功能',
+      stat: function () {
+        return api('/api/audio/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var totalMs = 0, voices = {};
+          for (var i = 0; i < list.length; i += 1) {
+            totalMs += (list[i].duration_ms || 0);
+            if (list[i].voice) { voices[list[i].voice] = 1; }
+          }
+          return [
+            { num: list.length, label: '配音片段', accent: true },
+            { num: Math.round(totalMs / 1000) + 's', label: '累计时长', accent: false },
+            { num: Object.keys(voices).length, label: '用过音色', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的配音',
+      recent: function () { return loadAudioRecent(); }
+    },
+    subtitle: {
+      toolsTitle: '字幕功能',
+      stat: function () {
+        return api('/api/subtitle/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var cues = 0;
+          for (var i = 0; i < list.length; i += 1) { cues += (list[i].cue_count || 0); }
+          return [
+            { num: list.length, label: '字幕稿', accent: true },
+            { num: cues, label: '字幕条数', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的字幕稿',
+      recent: function () { return loadSubtitleRecent(); }
+    },
+    edit: { toolsTitle: '编辑功能', stat: null, recentTitle: '', recent: null },
+    text: { toolsTitle: '文案功能', stat: null, recentTitle: '', recent: null }
+  };
+
+  function renderCategoryPanels(catKey) {
+    var cfg = CAT_PANELS[catKey] || CAT_PANELS.home;
+    var stats = el('home-stats');
+    var recentWrap = el('home-recent-wrap');
+    var toolsHead = el('home-tools-head');
+    var toolsTitle = el('home-tools-title');
+
+    if (toolsTitle) { toolsTitle.textContent = cfg.toolsTitle || '全部功能'; }
+    if (toolsHead) { toolsHead.style.display = ''; }
+
+    // 统计条
+    if (cfg.stat) {
+      if (stats) { stats.style.display = ''; stats.innerHTML = ''; }
+      cfg.stat().then(function (cells) {
+        if (!stats) { return; }
+        stats.innerHTML = cells.map(function (c) { return statCell(c.num, c.label, c.accent, c.jump); }).join('');
+      }).catch(function () { if (stats) { stats.style.display = 'none'; } });
+    } else if (stats) {
+      stats.style.display = 'none';
+      stats.innerHTML = '';
+    }
+
+    // 最近记录
+    if (cfg.recent) {
+      if (recentWrap) { recentWrap.style.display = ''; }
+      var titleEl = el('home-recent-title');
+      if (titleEl) { titleEl.textContent = cfg.recentTitle || '最近作品'; }
+      cfg.recent();
+    } else {
+      if (recentWrap) { recentWrap.style.display = 'none'; }
     }
   }
 
@@ -319,31 +455,6 @@
       '<div class="hs-num' + numCls + '">' + esc(String(num)) + '</div>' +
       '<div class="hs-label">' + esc(label) + '</div>' +
       '</div>';
-  }
-
-  function renderHomeStats() {
-    var wrap = el('home-stats');
-    if (!wrap) { return; }
-    // 先占位，异步填充真实数字
-    wrap.innerHTML = statCell('—', '图片作品', true, 'image') +
-      statCell('—', '视频任务', true, 'video') +
-      statCell('—', '配音片段', false, 'audio') +
-      statCell('—', '字幕稿', false, 'subtitle');
-    Promise.all([
-      api('/api/images/history?limit=200').catch(function () { return []; }),
-      api('/api/tasks?limit=200').catch(function () { return []; }),
-      api('/api/audio/history?limit=200').catch(function () { return []; }),
-      api('/api/subtitle/history?limit=200').catch(function () { return []; })
-    ]).then(function (res) {
-      var imgs = (res[0] || []).length;
-      var tasks = (res[1] || []).length;
-      var audios = (res[2] || []).length;
-      var subs = (res[3] || []).length;
-      wrap.innerHTML = statCell(imgs, '图片作品', true, 'image') +
-        statCell(tasks, '视频任务', true, 'video') +
-        statCell(audios, '配音片段', false, 'audio') +
-        statCell(subs, '字幕稿', false, 'subtitle');
-    });
   }
 
   function timeAgo(str) {
@@ -411,6 +522,113 @@
       }).join('');
     });
   }
+
+  function loadImageRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/images/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      historyRows = list.concat(historyRows).filter(function (r, idx, arr) {
+        return arr.findIndex(function (x) { return x.id === r.id; }) === idx;
+      });
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 张'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有图片。点下面「图片生成」做一张，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (r) {
+        return '<button class="hr-card" data-open-image="' + esc(r.id) + '">' +
+          '<div class="hr-thumb"><img loading="lazy" src="' + esc(r.url) + '" alt="">' +
+          '<span class="hr-badge">' + esc(r.width + '×' + r.height) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((r.prompt || '文生图作品').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">' + esc(r.style || 'none') + ' · ' + esc(timeAgo(r.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function loadTaskRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/tasks?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 个任务'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有视频任务。点下面「智能成片」或「新建任务」开始一个。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (t) {
+        var label = STATUS_TEXT[t.status] || t.status || '';
+        var badgeCls = ' hr-badge-' + String(t.status || '').toLowerCase();
+        return '<button class="hr-card" data-open-task="' + esc(String(t.id)) + '">' +
+          '<div class="hr-thumb hr-thumb-video"><div class="hr-play">▶</div>' +
+          '<span class="hr-badge' + badgeCls + '">' + esc(label) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((t.brief || '视频任务').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">任务 #' + esc(String(t.id)) + ' · ' + esc(timeAgo(t.updated_at || t.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function loadAudioRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/audio/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 段'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有配音。点下面「配音工坊」合成一段，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (a) {
+        var sec = a.duration_ms ? Math.round(a.duration_ms / 1000) + 's' : '—';
+        return '<div class="au-card">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((a.text || '配音片段').slice(0, 28)) + '</span>' +
+          '<span class="au-card-badge">' + esc(sec) + '</span></div>' +
+          '<audio controls preload="none" src="' + esc(a.url) + '"></audio>' +
+          '<div class="au-card-meta"><span>' + esc(a.voice || '') + '</span> · ' + esc(timeAgo(a.created_at)) +
+          ' · <a href="' + esc(a.url) + '" download>下载 WAV</a></div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
+  function loadSubtitleRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/subtitle/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 份'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有字幕稿。点下面「字幕工坊」生成一份，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (s) {
+        var links = '';
+        var urls = s.urls || {};
+        ['ass', 'srt', 'vtt'].forEach(function (fmt) {
+          if (urls[fmt]) {
+            links += '<a href="' + esc(urls[fmt]) + '" download>.' + fmt + '</a> ';
+          }
+        });
+        return '<div class="au-card">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((s.text || '字幕稿').slice(0, 28)) + '</span>' +
+          '<span class="au-card-badge">' + esc((s.cue_count || 0) + ' 条') + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc(s.mode || '') + ' · 每行≤' + esc(String(s.max_chars || '')) + '字</span> · ' + esc(timeAgo(s.created_at)) +
+          ' · ' + links + '</div>' +
+          '</div>';
+      }).join('');
+    });
+  }
+
 
   function bindHome() {
     var wrap = el('home-recent');
@@ -886,8 +1104,16 @@
   }
 
   function openLightbox(url, meta) {
-    el('lightbox-img').src = url;
-    el('lightbox-meta').textContent = meta || '';
+    // 兼容两种调用：openLightbox(item对象) 或 openLightbox(url, meta)
+    if (url && typeof url === 'object') {
+      var item = url;
+      el('lightbox-img').src = item.url || ('/api/images/files/' + item.file);
+      el('lightbox-meta').textContent = (item.width && item.height ? item.width + '×' + item.height + ' · ' : '') +
+        (item.prompt || item.file || '') + (item.seed ? '  ·  seed ' + item.seed : '');
+    } else {
+      el('lightbox-img').src = url;
+      el('lightbox-meta').textContent = meta || '';
+    }
     el('lightbox').classList.add('open');
   }
 

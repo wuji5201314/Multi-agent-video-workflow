@@ -795,3 +795,50 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 .hr-badge-running { background: rgba(0, 113, 227, 0.92); }
 .hr-badge-done { background: rgba(52, 199, 89, 0.92); }
 .hr-badge-failed { background: rgba(255, 59, 48, 0.92); }
+/* 音频 / 字幕 分类页的作品卡 */
+.au-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid rgba(0, 0, 0, .06);
+  border-radius: var(--r-md);
+}
+.au-card audio {
+  width: 100%;
+  height: 34px;
+}
+.au-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.au-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.au-card-badge {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: rgba(0, 0, 0, .05);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.au-card-meta {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+.au-card-meta a {
+  color: var(--blue);
+  text-decoration: none;
+}
+.au-card-meta a:hover { text-decoration: underline; }

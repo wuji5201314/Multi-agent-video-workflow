@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
 <title>Multi-Agent Video Workflow · 创作工作台</title>
-<link rel="stylesheet" href="/app.css?v=6" />
+<link rel="stylesheet" href="/app.css?v=7" />
 </head>
 <body>
 
@@ -74,19 +74,19 @@
         <div class="count-badge" id="page-count">3 个功能</div>
       </div>
       <div class="notice" id="page-notice"></div>
-      <!-- 概览统计 -->
+      <!-- 概览统计（首页为全局 4 格；分类页为分类内统计） -->
       <div class="home-stats" id="home-stats"></div>
-      <!-- 最近作品 -->
+      <!-- 最近作品 / 分类记录 -->
       <div class="home-section" id="home-recent-wrap">
         <div class="home-section-head">
-          <div class="home-section-title">最近作品</div>
+          <div class="home-section-title" id="home-recent-title">最近作品</div>
           <div class="home-section-hint" id="home-recent-hint"></div>
         </div>
         <div class="home-recent" id="home-recent"></div>
       </div>
       <!-- 功能入口 -->
-      <div class="home-section-head home-tools-head">
-        <div class="home-section-title">全部功能</div>
+      <div class="home-section-head home-tools-head" id="home-tools-head">
+        <div class="home-section-title" id="home-tools-title">全部功能</div>
       </div>
       <div id="group-list"></div>
     </div>
@@ -378,7 +378,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/app.js?v=6"></script>
-<script src="/studio.js?v=6"></script>
+<script src="/app.js?v=7"></script>
+<script src="/studio.js?v=7"></script>
 </body>
 </html>
