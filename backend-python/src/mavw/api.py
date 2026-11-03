@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import asdict
 from pathlib import Path
@@ -28,6 +29,20 @@ from .pipeline.steps import Step
 from .render.models import RenderRequest, RenderResult
 
 logger = logging.getLogger(__name__)
+
+
+async def _read_json(request: Request) -> dict[str, Any]:
+    """按 UTF-8 读取并解析 JSON 请求体。
+
+    Windows 上 starlette 解析 JSON 时可能回退到系统代码页(cp936)，中文会变成乱码。
+    这里显式用 UTF-8 解码原始字节，保证中文正确。
+    """
+    raw = await request.body()
+    if not raw:
+        return {}
+    text = raw.decode("utf-8-sig")
+    data = json.loads(text)
+    return data if isinstance(data, dict) else {}
 
 
 class CreateTaskBody(BaseModel):
@@ -88,7 +103,8 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/tasks")
-    async def create_task(body: CreateTaskBody) -> dict[str, Any]:
+    async def create_task(request: Request) -> dict[str, Any]:
+        body = CreateTaskBody(**(await _read_json(request)))
         task = service.create_task(body.brief, body.style)
         return await service.advance(task["task_id"], auto=False)
 
@@ -111,7 +127,8 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/tasks/{task_id}/gates/{step}")
-    async def gate(task_id: int, step: str, body: GateBody) -> dict[str, Any]:
+    async def gate(task_id: int, step: str, request: Request) -> dict[str, Any]:
+        body = GateBody(**(await _read_json(request)))
         try:
             return await service.submit(
                 task_id, Step(step.upper()), body.decision, body.note, body.payload
@@ -183,7 +200,8 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/images/generate", response_model=ImageGenerateResponse)
-    async def images_generate(body: ImageGenerateRequest) -> ImageGenerateResponse:
+    async def images_generate(request: Request) -> ImageGenerateResponse:
+        body = ImageGenerateRequest(**(await _read_json(request)))
         try:
             return await studio.generate(body)
         except Exception as exc:  # noqa: BLE001 - 把模型侧错误原样回给前端
@@ -209,7 +227,8 @@ def create_app() -> FastAPI:
         return {"file": name, "url": f"/api/images/uploads/{name}"}
 
     @app.post("/api/images/analyze", response_model=AnalyzeResponse)
-    async def images_analyze(body: AnalyzeRequest) -> AnalyzeResponse:
+    async def images_analyze(request: Request) -> AnalyzeResponse:
+        body = AnalyzeRequest(**(await _read_json(request)))
         try:
             return await studio.analyze(body.file, body.instruction)
         except FileNotFoundError as exc:
@@ -250,7 +269,9 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/audio/tts")
-    async def audio_tts(body: TtsBody) -> dict[str, Any]:
+    async def audio_tts(request: Request) -> dict[str, Any]:
+        # 手动按 UTF-8 解码请求体，规避 Windows 上 starlette 默认用系统代码页(cp936)解析 JSON 的中文乱码问题。
+        body = TtsBody(**(await _read_json(request)))
         try:
             item = await audio.synthesize(
                 body.text,
@@ -288,7 +309,9 @@ def create_app() -> FastAPI:
         return subtitles.options()
 
     @app.post("/api/subtitle/build")
-    async def subtitle_build(body: SubtitleBody) -> dict[str, Any]:
+    async def subtitle_build(request: Request) -> dict[str, Any]:
+        # 同上：显式 UTF-8 解析，避免中文乱码。
+        body = SubtitleBody(**(await _read_json(request)))
         try:
             item = subtitles.build(
                 body.text,
