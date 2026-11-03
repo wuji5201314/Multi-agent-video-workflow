@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 // Java 后端再转发给 Python 渲染引擎 8010。前端无需关心后端拆分。
 export default defineConfig({
   server: {
+    host: '127.0.0.1',
     port: 5173,
     open: true,
     proxy: {

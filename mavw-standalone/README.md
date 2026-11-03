@@ -64,6 +64,18 @@ npm run dev
 
 打开 http://127.0.0.1:5173/ 。
 
+## 二·五、双击 .bat 启动（不依赖 IDEA，启动文件都在各自目录）
+
+| 双击这个文件 | 启动什么 | 端口 |
+| --- | --- | --- |
+| `backend-python\start.bat` | Python 渲染引擎 | 8010 |
+| `mavw-standalone\backend\start-backend.bat` | Java 后端（有 jar 直接跑 jar，没有才用 Maven 打） | 8088 |
+| `mavw-standalone\frontend\start-frontend.bat` | 前端 Vite（首次自动 npm install） | 5173 |
+| **`mavw-standalone\start-all.bat`** | **三个一键全启并自动打开浏览器** | 8010→8088→5173 |
+| `mavw-standalone\stop-all.bat` | 停止上面三个端口的服务 | — |
+
+> 启动文件都就地放在对应模块目录，不集中塞在别处；`start-all.bat` 只是便利入口。
+
 ## 三、构建产物
 
 ```powershell
