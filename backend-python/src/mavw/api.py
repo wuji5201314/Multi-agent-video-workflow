@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import get_settings
+from .audio import AudioStudio
+from .subtitle import SubtitleStudio
 from .images import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -38,6 +41,21 @@ class GateBody(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class TtsBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    voice: str = ""
+    rate: float = Field(default=0.0, ge=-50, le=100)
+    volume: float = Field(default=0.0, ge=-50, le=100)
+    provider: str = ""
+
+
+class SubtitleBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    mode: str = ""
+    max_chars: int = Field(default=0, ge=0, le=40)
+    duration_ms: int = Field(default=0, ge=0)
+
+
 # 上传参考图的体积上限，避免一次 POST 把内存打满
 _MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
@@ -46,16 +64,27 @@ def create_app() -> FastAPI:
     settings = get_settings()
     service = PipelineService(settings)
     studio = ImageStudio(settings)
+    audio = AudioStudio(settings)
+    subtitles = SubtitleStudio(settings)
     app = FastAPI(title="Multi-Agent Video Workflow", version="0.2.0")
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
+        # ffmpeg 是否可用直接决定配音/字幕/成片能不能真正跑起来，提前探测一次。
+        from .render.ffmpeg_tools import MediaRenderError, ffmpeg_executable
+
+        try:
+            has_ffmpeg = bool(ffmpeg_executable())
+        except MediaRenderError:
+            has_ffmpeg = False
         return {
             "status": "ok",
             "storage_backend": settings.storage_backend,
             "tts_provider": settings.media_render_tts_provider,
             "video": [settings.media_render_width, settings.media_render_height],
             "has_llm_key": bool(settings.api_key),
+            "has_image_key": bool(settings.image_api_key),
+            "has_ffmpeg": has_ffmpeg,
         }
 
     @app.post("/api/tasks")
@@ -209,6 +238,85 @@ def create_app() -> FastAPI:
             return FileResponse(studio.upload_path(file_name))
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="参考图不存在") from exc
+
+    # ---------------- 配音工作台 ----------------
+
+    @app.get("/api/audio/voices")
+    async def audio_voices() -> dict[str, Any]:
+        return {
+            "voices": audio.voices(),
+            "provider": settings.media_render_tts_provider,
+            "max_chars": settings.media_render_tts_max_chars,
+        }
+
+    @app.post("/api/audio/tts")
+    async def audio_tts(body: TtsBody) -> dict[str, Any]:
+        try:
+            item = await audio.synthesize(
+                body.text,
+                voice=body.voice,
+                rate=body.rate,
+                volume=body.volume,
+                provider=body.provider,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 语音服务侧错误原样回给前端
+            logger.exception("配音合成失败")
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return asdict(item)
+
+    @app.get("/api/audio/history")
+    async def audio_history(limit: int = 30) -> list[dict[str, Any]]:
+        return audio.history(limit)
+
+    @app.delete("/api/audio/{audio_id}")
+    async def audio_delete(audio_id: str) -> dict[str, bool]:
+        return {"deleted": audio.delete(audio_id)}
+
+    @app.get("/api/audio/files/{file_name}")
+    async def audio_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(audio.path_for(file_name), media_type="audio/wav")
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="音频不存在") from exc
+
+    # ---------------- 字幕工作台 ----------------
+
+    @app.get("/api/subtitle/options")
+    async def subtitle_options() -> dict[str, Any]:
+        return subtitles.options()
+
+    @app.post("/api/subtitle/build")
+    async def subtitle_build(body: SubtitleBody) -> dict[str, Any]:
+        try:
+            item = subtitles.build(
+                body.text,
+                mode=body.mode,
+                max_chars=body.max_chars,
+                duration_ms=body.duration_ms,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("字幕构建失败")
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return asdict(item)
+
+    @app.get("/api/subtitle/history")
+    async def subtitle_history(limit: int = 30) -> list[dict[str, Any]]:
+        return subtitles.history(limit)
+
+    @app.delete("/api/subtitle/{sub_id}")
+    async def subtitle_delete(sub_id: str) -> dict[str, bool]:
+        return {"deleted": subtitles.delete(sub_id)}
+
+    @app.get("/api/subtitle/files/{file_name}")
+    async def subtitle_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(subtitles.path_for(file_name))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="字幕文件不存在") from exc
 
     @app.middleware("http")
     async def no_cache_static(request: Request, call_next):
