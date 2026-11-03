@@ -586,18 +586,20 @@
         wrap.innerHTML = '<div class="home-empty">还没有配音。点下面「配音工坊」合成一段，成品会出现在这里。</div>';
         return;
       }
-      wrap.innerHTML = list.map(function (a) {
+      wrap.innerHTML = list.map(function (a, idx) {
         var sec = a.duration_ms ? Math.round(a.duration_ms / 1000) + 's' : '—';
-        return '<div class="au-card">' +
+        return '<button class="au-card au-card-click" data-open-audio="' + esc(a.id) + '">' +
           '<div class="au-card-head"><span class="au-card-title">' + esc((a.text || '配音片段').slice(0, 28)) + '</span>' +
           '<span class="au-card-badge">' + esc(sec) + '</span></div>' +
-          '<audio controls preload="none" src="' + esc(a.url) + '"></audio>' +
-          '<div class="au-card-meta"><span>' + esc(a.voice || '') + '</span> · ' + esc(timeAgo(a.created_at)) +
-          ' · <a href="' + esc(a.url) + '" download>下载 WAV</a></div>' +
-          '</div>';
+          '<div class="au-card-play"><span class="au-play-tri">&#9654;</span><span>点击试听</span></div>' +
+          '<div class="au-card-meta"><span>' + esc(a.voice || '') + '</span> · ' + esc(timeAgo(a.created_at)) + '</div>' +
+          '</button>';
       }).join('');
+      // 记录行对象，供点击进入详情
+      audioRecentRows = list;
     });
   }
+  var audioRecentRows = [];
 
   function loadSubtitleRecent() {
     var wrap = el('home-recent');
@@ -612,23 +614,280 @@
         return;
       }
       wrap.innerHTML = list.map(function (s) {
-        var links = '';
-        var urls = s.urls || {};
-        ['ass', 'srt', 'vtt'].forEach(function (fmt) {
-          if (urls[fmt]) {
-            links += '<a href="' + esc(urls[fmt]) + '" download>.' + fmt + '</a> ';
-          }
-        });
-        return '<div class="au-card">' +
+        return '<button class="au-card au-card-click" data-open-subtitle="' + esc(s.id) + '">' +
           '<div class="au-card-head"><span class="au-card-title">' + esc((s.text || '字幕稿').slice(0, 28)) + '</span>' +
           '<span class="au-card-badge">' + esc((s.cue_count || 0) + ' 条') + '</span></div>' +
-          '<div class="au-card-meta"><span>' + esc(s.mode || '') + ' · 每行≤' + esc(String(s.max_chars || '')) + '字</span> · ' + esc(timeAgo(s.created_at)) +
-          ' · ' + links + '</div>' +
-          '</div>';
+          '<div class="au-card-meta"><span>' + esc(s.mode || '') + ' · 每行≤' + esc(String(s.max_chars || '')) + '字</span> · ' + esc(timeAgo(s.created_at)) + '</div>' +
+          '</button>';
       }).join('');
+      subtitleRecentRows = list;
+    });
+  }
+  var subtitleRecentRows = [];
+
+
+  /* ---------------- 作品详情页 ---------------- */
+
+  // 记住从哪个分类进来的，返回时回到原处（并重渲染该分类）
+  var detailReturnCat = 'home';
+
+  function detailKV(label, value, opts) {
+    opts = opts || {};
+    var valHtml = opts.html ? value : esc(value == null ? '' : String(value));
+    var cls = 'detail-kv' + (opts.mono ? ' detail-kv-mono' : '') + (opts.block ? ' detail-kv-block' : '');
+    return '<div class="' + cls + '"><span class="detail-kv-label">' + esc(label) + '</span>' +
+      '<span class="detail-kv-value">' + valHtml + '</span></div>';
+  }
+
+  function detailShell(crumb, inner) {
+    el('detail-crumb').textContent = crumb;
+    el('detail-body').innerHTML = inner;
+  }
+
+  function openImageDetail(row) {
+    if (!row) { toast('找不到这张图片', true); return; }
+    var url = row.url || ('/api/images/files/' + row.file);
+    var seed = row.seed ? String(row.seed) : '—';
+    var size = (row.width && row.height) ? (row.width + ' × ' + row.height) : '—';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media"><img class="detail-img" src="' + esc(url) + '" alt="' + esc(row.prompt || '') + '"></div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc((row.prompt || '文生图作品').slice(0, 80)) + '</div>' +
+          '<div class="detail-meta-line">' + esc(size) + ' · ' + esc(row.style || 'none') + ' · ' + esc(timeAgo(row.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('提示词', row.prompt || '—', { block: true }) +
+            (row.negative_prompt ? detailKV('负面提示', row.negative_prompt, { block: true }) : '') +
+            detailKV('画风', row.style || 'none') +
+            detailKV('质量', row.quality || 'standard') +
+            detailKV('模型', row.model || 'klein') +
+            detailKV('尺寸', size) +
+            detailKV('种子', seed, { mono: true }) +
+            detailKV('耗时', row.elapsed_ms ? (Math.round(row.elapsed_ms / 100) / 10) + 's' : '—') +
+            detailKV('创建时间', row.created_at || '—') +
+          '</div>' +
+          '<div class="detail-actions">' +
+            '<a class="btn btn-primary btn-sm" href="' + esc(url) + '" download>下载原图</a>' +
+            '<button class="btn btn-secondary btn-sm" data-detail-reuse="' + esc(row.id) + '">复用参数再生成</button>' +
+            '<button class="btn btn-ghost btn-sm" data-detail-delete-image="' + esc(row.id) + '">删除</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('图片详情 · ' + (row.width || '') + '×' + (row.height || ''), inner);
+    switchView('detail');
+  }
+
+  function openTaskDetail(tid) {
+    el('detail-body').innerHTML = '<div class="home-empty">加载中…</div>';
+    switchView('detail');
+    el('detail-crumb').textContent = '视频任务详情 · #' + tid;
+    api('/api/tasks/' + tid).then(function (task) {
+      renderTaskDetail(task);
+    }).catch(function () {
+      el('detail-body').innerHTML = '<div class="home-empty">任务加载失败。请确认 Python 引擎在运行。</div>';
     });
   }
 
+  function taskArtifact(task, kind) {
+    var list = (task && task.artifacts) || [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i] && list[i].kind === kind) { return list[i]; }
+    }
+    return null;
+  }
+
+  function stepDotCls(status) {
+    var s = String(status || '').toUpperCase();
+    if (s === 'SUCCEEDED') { return 'done'; }
+    if (s === 'RUNNING') { return 'running'; }
+    if (s === 'FAILED') { return 'failed'; }
+    if (s === 'WAITING_INPUT') { return 'waiting'; }
+    return 'pending';
+  }
+
+  function renderTaskDetail(task) {
+    if (!task) {
+      el('detail-body').innerHTML = '<div class="home-empty">任务不存在。</div>';
+      return;
+    }
+    var statusLabel = STATUS_TEXT[task.status] || task.status || '';
+    var badgeCls = ' hr-badge-' + String(task.status || '').toLowerCase();
+    var tid = task.task_id != null ? task.task_id : task.id;
+    var videoArt = taskArtifact(task, 'video');
+    var coverArt = taskArtifact(task, 'cover');
+    var videoUrl = videoArt ? ('/api/tasks/' + tid + '/artifacts/' + videoArt.id) : '';
+    var coverUrl = coverArt ? ('/api/tasks/' + tid + '/artifacts/' + coverArt.id) : '';
+
+    // 步骤条
+    var steps = (task.steps || []);
+    var stepsHtml = steps.map(function (s) {
+      return '<div class="detail-step detail-step-' + stepDotCls(s.status) + '">' +
+        '<span class="detail-step-dot"></span>' +
+        '<span class="detail-step-name">' + esc(s.title || s.code || '') + '</span>' +
+        '<span class="detail-step-state">' + esc(STEP_TEXT[s.status] || s.status || '') + '</span>' +
+        '</div>';
+    }).join('');
+
+    // 脚本 / 分镜
+    var script = (task.steps || []).filter(function (s) { return s.code === 'SCRIPT'; })[0];
+    var scriptData = (script && script.payload) || {};
+    var shotsHtml = '';
+    if (scriptData.script && scriptData.script.shots) {
+      shotsHtml = scriptData.script.shots.map(function (shot, idx) {
+        return '<div class="detail-shot">' +
+          '<div class="detail-shot-idx">' + (idx + 1) + '</div>' +
+          '<div class="detail-shot-body"><div class="detail-shot-h">' + esc(shot.headline || '') + '</div>' +
+          '<div class="detail-shot-b">' + esc(shot.body || '') + '</div></div>' +
+          '</div>';
+      }).join('');
+    }
+
+    var mediaHtml;
+    if (videoUrl) {
+      mediaHtml = '<video class="detail-video" controls src="' + esc(videoUrl) + '"' +
+        (coverUrl ? ' poster="' + esc(coverUrl) + '"' : '') +
+        '></video>';
+    } else {
+      mediaHtml = '<div class="detail-video detail-video-empty"><div class="hr-play">▶</div>' +
+        '<div class="subtle">还没有成片，任务在 ' + esc(statusLabel) + '</div></div>';
+    }
+
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media">' + mediaHtml + '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc((task.brief || '视频任务').slice(0, 80)) + '</div>' +
+          '<div class="detail-meta-line">任务 #' + esc(String(tid)) + ' · <span class="hr-badge' + badgeCls + '">' + esc(statusLabel) + '</span>' +
+            (task.style ? ' · ' + esc(task.style) : '') + ' · ' + esc(timeAgo(task.updated_at || task.created_at)) + '</div>' +
+          '<div class="detail-steps">' + stepsHtml + '</div>' +
+          (scriptData.script ? (
+            '<div class="detail-kvs">' +
+              detailKV('标题', scriptData.script.title || task.brief || '—', { block: true }) +
+              (scriptData.script.caption ? detailKV('发布文案', scriptData.script.caption, { block: true }) : '') +
+              (scriptData.script.tags && scriptData.script.tags.length ? detailKV('标签', (scriptData.script.tags || []).join(' ')) : '') +
+            '</div>'
+          ) : '') +
+          '<div class="detail-actions">' +
+            (videoUrl ? '<a class="btn btn-primary btn-sm" href="' + esc(videoUrl) + '" download>下载成片</a>' : '') +
+            '<button class="btn btn-secondary btn-sm" data-detail-open-task="' + esc(String(tid)) + '">在管线里打开</button>' +
+          '</div>' +
+          (shotsHtml ? '<div class="detail-section-title">分镜</div><div class="detail-shots">' + shotsHtml + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    detailShell('视频任务详情 · #' + tid, inner);
+  }
+
+  var STEP_TEXT = { PENDING: '未开始', WAITING_INPUT: '待确认', RUNNING: '进行中', SUCCEEDED: '完成', FAILED: '失败' };
+
+  function openAudioDetail(a) {
+    if (!a) { toast('找不到这段配音', true); return; }
+    var sec = a.duration_ms ? (Math.round(a.duration_ms / 100) / 10) + 's' : '—';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media detail-media-audio">' +
+          '<div class="detail-audio-badge">' + esc(sec) + '</div>' +
+          '<audio class="detail-audio" controls src="' + esc(a.url) + '"></audio>' +
+        '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">配音片段</div>' +
+          '<div class="detail-meta-line">' + esc(a.voice || '') + ' · ' + esc(sec) + ' · ' + esc(timeAgo(a.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('配音文本', a.text || '—', { block: true }) +
+            detailKV('音色', a.voice || '—') +
+            (a.rate != null ? detailKV('语速', String(a.rate).indexOf('%') >= 0 ? a.rate : (a.rate + '%')) : '') +
+            (a.volume != null ? detailKV('音量', String(a.volume).indexOf('%') >= 0 ? a.volume : (a.volume + '%')) : '') +
+            detailKV('时长', sec) +
+            detailKV('创建时间', a.created_at || '—') +
+          '</div>' +
+          '<div class="detail-actions">' +
+            '<a class="btn btn-primary btn-sm" href="' + esc(a.url) + '" download>下载 WAV</a>' +
+            '<button class="btn btn-ghost btn-sm" data-detail-delete-audio="' + esc(a.id) + '">删除</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('配音详情 · ' + sec, inner);
+    switchView('detail');
+  }
+
+  function openSubtitleDetail(s) {
+    if (!s) { toast('找不到这份字幕', true); return; }
+    var urls = s.urls || {};
+    var links = ['ass', 'srt', 'vtt'].map(function (fmt) {
+      return urls[fmt] ? '<a class="btn btn-secondary btn-sm" href="' + esc(urls[fmt]) + '" download>下载 .' + fmt + '</a>' : '';
+    }).join('');
+    var cues = s.cues || [];
+    var cueHtml = cues.length ? cues.map(function (c) {
+      return '<div class="detail-cue"><span class="detail-cue-time">' + esc(fmtCueTime(c.start_ms)) + ' – ' + esc(fmtCueTime(c.end_ms)) + '</span>' +
+        '<span class="detail-cue-text">' + esc(c.text || '') + '</span></div>';
+    }).join('') : '<div class="subtle">无字幕条目</div>';
+    var inner =
+      '<div class="detail-grid detail-grid-wide">' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">字幕稿</div>' +
+          '<div class="detail-meta-line">' + esc(s.mode || '') + ' · ' + esc((s.cue_count || 0) + ' 条') + ' · 每行≤' + esc(String(s.max_chars || '')) + ' 字 · ' + esc(timeAgo(s.created_at)) + '</div>' +
+          '<div class="detail-kvs">' + detailKV('原文', s.text || '—', { block: true }) + '</div>' +
+          '<div class="detail-actions">' + links + '</div>' +
+          '<div class="detail-section-title">字幕条目</div>' +
+          '<div class="detail-cues">' + cueHtml + '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('字幕详情 · ' + (s.cue_count || 0) + ' 条', inner);
+    switchView('detail');
+  }
+
+  function fmtCueTime(ms) {
+    if (ms == null) { return '--:--'; }
+    var total = Math.round(ms / 1000);
+    var m = Math.floor(total / 60);
+    var sec = total % 60;
+    return m + ':' + (sec < 10 ? '0' + sec : sec);
+  }
+
+  function backFromDetail() {
+    switchView(detailReturnCat || 'home');
+    renderCategory(detailReturnCat || 'home');
+  }
+
+  function bindDetail() {
+    var back = el('btn-detail-back');
+    if (back) { back.addEventListener('click', backFromDetail); }
+    var body = el('detail-body');
+    if (!body) { return; }
+    body.addEventListener('click', function (event) {
+      var reuse = event.target.closest('[data-detail-reuse]');
+      if (reuse) { restoreParams(reuse.getAttribute('data-detail-reuse')); return; }
+      var delImg = event.target.closest('[data-detail-delete-image]');
+      if (delImg) {
+        var iid = delImg.getAttribute('data-detail-delete-image');
+        if (!window.confirm('删除这张图片？')) { return; }
+        api('/api/images/' + iid, { method: 'DELETE' }).then(function () {
+          toast('已删除');
+          backFromDetail();
+        }).catch(function () { toast('删除失败', true); });
+        return;
+      }
+      var delAudio = event.target.closest('[data-detail-delete-audio]');
+      if (delAudio) {
+        var aid = delAudio.getAttribute('data-detail-delete-audio');
+        if (!window.confirm('删除这段配音？')) { return; }
+        api('/api/audio/' + aid, { method: 'DELETE' }).then(function () {
+          toast('已删除');
+          backFromDetail();
+        }).catch(function () { toast('删除失败', true); });
+        return;
+      }
+      var openTask = event.target.closest('[data-detail-open-task]');
+      if (openTask) {
+        var tid = openTask.getAttribute('data-detail-open-task');
+        switchView('video');
+        if (window.__videoBoot) { window.__videoBoot(); }
+        setTimeout(function () {
+          var node = document.querySelector('#task-list [data-task="' + tid + '"]');
+          if (node) { node.click(); }
+        }, 300);
+      }
+    });
+  }
 
   function bindHome() {
     var wrap = el('home-recent');
@@ -637,6 +896,7 @@
       var imgBtn = event.target.closest('[data-open-image]');
       if (imgBtn) {
         var id = imgBtn.getAttribute('data-open-image');
+        detailReturnCat = state.cat || 'home';
         var row = null;
         for (var i = 0; i < historyRows.length; i += 1) {
           if (String(historyRows[i].id) === String(id)) { row = historyRows[i]; break; }
@@ -648,23 +908,40 @@
             for (var k = 0; k < historyRows.length; k += 1) {
               if (String(historyRows[k].id) === String(id)) { found = historyRows[k]; break; }
             }
-            if (found) { openLightbox(found); }
+            if (found) { openImageDetail(found); }
           }).catch(function () {});
           return;
         }
-        openLightbox(row);
+        openImageDetail(row);
         return;
       }
       var taskBtn = event.target.closest('[data-open-task]');
       if (taskBtn) {
-        switchView('video');
-        if (window.__videoBoot) { window.__videoBoot(); }
-        var tid = taskBtn.getAttribute('data-open-task');
-        // 延迟一点让视频视图完成渲染后打开任务
-        setTimeout(function () {
-          var node = document.querySelector('#task-list [data-task="' + tid + '"]');
-          if (node) { node.click(); }
-        }, 300);
+        detailReturnCat = state.cat || 'home';
+        openTaskDetail(taskBtn.getAttribute('data-open-task'));
+        return;
+      }
+      var audioBtn = event.target.closest('[data-open-audio]');
+      if (audioBtn) {
+        detailReturnCat = 'audio';
+        var aid = audioBtn.getAttribute('data-open-audio');
+        var arow = null;
+        for (var ai = 0; ai < audioRecentRows.length; ai += 1) {
+          if (String(audioRecentRows[ai].id) === String(aid)) { arow = audioRecentRows[ai]; break; }
+        }
+        openAudioDetail(arow);
+        return;
+      }
+      var subBtn = event.target.closest('[data-open-subtitle]');
+      if (subBtn) {
+        detailReturnCat = 'subtitle';
+        var sid = subBtn.getAttribute('data-open-subtitle');
+        var srow = null;
+        for (var si = 0; si < subtitleRecentRows.length; si += 1) {
+          if (String(subtitleRecentRows[si].id) === String(sid)) { srow = subtitleRecentRows[si]; break; }
+        }
+        openSubtitleDetail(srow);
+        return;
       }
     });
   }
@@ -677,6 +954,7 @@
     el('view-video').classList.toggle('active', name === 'video');
     el('view-audio').classList.toggle('active', name === 'audio');
     el('view-subtitle').classList.toggle('active', name === 'subtitle');
+    if (el('view-detail')) { el('view-detail').classList.toggle('active', name === 'detail'); }
     el('btn-new-video').hidden = name !== 'video';
   }
 
@@ -1543,6 +1821,7 @@
   function boot() {
     bindNav();
     bindHome();
+    bindDetail();
     bindDropzone();
     bindGallery();
     bindAudioWorkspace();
