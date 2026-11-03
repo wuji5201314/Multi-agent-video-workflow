@@ -98,3 +98,9 @@ desktop.ini
 # Java standalone launcher 构建产物
 backend-java/standalone-launcher/target/
 
+
+# mavw-standalone 构建产物与依赖
+mavw-standalone/backend/target/
+mavw-standalone/frontend/node_modules/
+mavw-standalone/frontend/dist/
+

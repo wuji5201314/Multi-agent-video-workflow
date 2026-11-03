@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="标准 · 后端 Java (MavwApplication :8088)" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.mavw.standalone.MavwApplication" />
+    <module name="mavw-standalone-backend" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/mavw-standalone/backend" />
+    <option name="VM_PARAMETERS" value="" />
+    <option name="PROGRAM_PARAMETERS" value="" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
