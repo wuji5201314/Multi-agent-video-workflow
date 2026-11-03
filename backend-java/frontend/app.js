@@ -379,7 +379,11 @@
     }
     var html = '<div class="preview-wrap">';
     if (artifact) {
-      html += '<video class="preview-video" controls preload="metadata" src="/api/tasks/' + task.task_id + '/artifacts/' + artifact.id + '"></video>';
+      var src = '/api/tasks/' + task.task_id + '/artifacts/' + artifact.id;
+      html += '<video class="preview-video" controls preload="metadata" src="' + src + '"></video>';
+      html += '<div class="inline-row" style="margin-top:10px">';
+      html += '<a class="btn btn-primary btn-sm" href="' + esc(src) + '" download="成片-' + task.task_id + '.mp4">下载成片</a>';
+      html += '</div>';
     } else {
       html += '<div class="preview-video"></div>';
     }
@@ -416,11 +420,17 @@
     var payload = step.payload || {};
     var plan = payload.plan || [];
     var body = payload.payload || {};
+    var tags = (body.tags || []).join(' ');
     var html = '<div class="kv">';
-    html += kvRow('标题', body.title || '—');
-    html += kvRow('文案', body.caption || '—');
-    html += kvRow('标签', (body.tags || []).join(' · ') || '—');
-    html += kvRow('目标平台', (body.platforms || []).join(' · ') || '—');
+    html += '<div class="kv-row"><span>标题</span><b>' + esc(body.title || '—') + '</b></div>';
+    html += '<div class="kv-row"><span>文案</span><b>' + esc(body.caption || '—') + '</b></div>';
+    html += '<div class="kv-row"><span>标签</span><b>' + esc((body.tags || []).join(' · ') || '—') + '</b></div>';
+    html += '<div class="kv-row"><span>目标平台</span><b>' + esc((body.platforms || []).join(' · ') || '—') + '</b></div>';
+    html += '</div>';
+    html += '<div class="inline-row" style="margin-top:10px">';
+    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc(body.caption || '') + '">复制文案</button>';
+    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc(tags) + '">复制标签</button>';
+    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc((body.title || '') + '\n' + (body.caption || '') + '\n' + tags) + '">一键复制全部</button>';
     html += '</div>';
     html += '<div class="subtle" style="margin:14px 0 8px">发布计划</div>';
     html += '<div class="code">' + esc(JSON.stringify(plan, null, 2)) + '</div>';
@@ -429,6 +439,36 @@
 
   function kvRow(key, value) {
     return '<div class="kv-row"><span>' + esc(key) + '</span><b>' + esc(value) + '</b></div>';
+  }
+
+  // 复制到剪贴板：优先用 Clipboard API，非安全上下文回退到临时 textarea。
+  function copyText(text, button) {
+    if (!text) { toast('没有可复制的内容', true); return; }
+    function done() {
+      toast('已复制');
+      if (button) {
+        var old = button.textContent;
+        button.textContent = '已复制';
+        setTimeout(function () { button.textContent = old; }, 1400);
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); } catch (err) { /* 忽略 */ }
+    area.remove();
   }
 
   /* ---------------- GATE 操作条 ---------------- */
@@ -488,6 +528,11 @@
       var gateBtn = event.target.closest('[data-gate]');
       if (gateBtn) {
         submitGate(task, step, gateBtn.getAttribute('data-gate'));
+      }
+
+      var copyBtn = event.target.closest('[data-copy]');
+      if (copyBtn) {
+        copyText(copyBtn.getAttribute('data-copy') || '', copyBtn);
       }
     });
 

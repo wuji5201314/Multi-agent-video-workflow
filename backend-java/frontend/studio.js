@@ -87,9 +87,9 @@
       tags: ['即将上线']
     },
     'voice-tts': {
-      name: '配音工坊', sub: '多音色', icon: 'voice', ready: false, tone: 'orange',
-      desc: '文案转语音，可选音色、语速与停顿。',
-      tags: ['即将上线', 'edge-tts']
+      name: '配音工坊', sub: '多音色', icon: 'voice', ready: true, mode: 'audio', tone: 'orange',
+      desc: '文案转语音，可选音色、语速与音量，产物可试听下载。',
+      tags: ['已接通', 'edge-tts']
     },
     'voice-clone': {
       name: '声音克隆', sub: '样音 10 秒', icon: 'clone', ready: false, tone: 'orange',
@@ -97,9 +97,9 @@
       tags: ['即将上线']
     },
     'subtitle': {
-      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: false, tone: 'green',
-      desc: '识别语音、自动断句、烧录成片。',
-      tags: ['即将上线', 'ASS']
+      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: true, mode: 'subtitle', tone: 'green',
+      desc: '贴口播稿，自动断句，导出 ASS / SRT / VTT 字幕。',
+      tags: ['已接通', 'ASS · SRT · VTT']
     },
     'copy-detail': {
       name: '详情页文案', sub: '成交型', icon: 'copy', ready: false, tone: 'purple',
@@ -120,8 +120,8 @@
       desc: '已经接通的功能排在前面，其余功能陆续开放。',
       notice: '生成结果都会进「历史记录」，图片可直接下载。',
       groups: [
-        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'video-pipeline'] },
-        { name: '即将上线', accent: '#c7c7cc', tools: ['cover', 'voice-tts', 'subtitle', 'copy-detail'] }
+        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'video-pipeline', 'voice-tts', 'subtitle'] },
+        { name: '即将上线', accent: '#c7c7cc', tools: ['cover', 'copy-detail'] }
       ]
     },
     image: {
@@ -178,6 +178,7 @@
   /* ---------------- 状态 ---------------- */
 
   var options = { ratios: [], styles: [], qualities: [], models: [] };
+  var hasImageKey = true;
   var state = {
     cat: 'home',
     tool: 'image-generate',
@@ -188,9 +189,19 @@
     model: 'klein',
     reference: '',
     tab: 'results',
-    busy: false
+    busy: false,
+    // 配音工作台
+    audioVoices: [],
+    audioBusy: false,
+    audioItems: [],
+    // 字幕工作台
+    subMode: 'sentence',
+    subMaxChars: 16,
+    subBusy: false,
+    subResult: null
   };
   var lastItems = [];
+  var historyRows = [];
   var toastTimer = null;
 
   function el(id) { return document.getElementById(id); }
@@ -299,6 +310,8 @@
     el('view-home').classList.toggle('active', name === 'home');
     el('view-studio').classList.toggle('active', name === 'studio');
     el('view-video').classList.toggle('active', name === 'video');
+    el('view-audio').classList.toggle('active', name === 'audio');
+    el('view-subtitle').classList.toggle('active', name === 'subtitle');
     el('btn-new-video').hidden = name !== 'video';
   }
 
@@ -343,6 +356,14 @@
     if (tool.mode === 'video') {
       switchView('video');
       if (window.__videoBoot) { window.__videoBoot(); }
+      return;
+    }
+    if (tool.mode === 'audio') {
+      openAudioWorkspace();
+      return;
+    }
+    if (tool.mode === 'subtitle') {
+      openSubtitleWorkspace();
       return;
     }
     state.tool = toolKey;
@@ -442,7 +463,15 @@
   function updatePromptMode() {
     var hasRef = !!state.reference;
     var button = el('btn-generate');
-    if (!state.busy) { button.textContent = hasRef ? '按参考图重绘' : '生成图片'; }
+    if (!state.busy) {
+      if (!hasImageKey) {
+        button.disabled = true;
+        button.textContent = '未配置出图密钥';
+      } else {
+        button.disabled = false;
+        button.textContent = hasRef ? '按参考图重绘' : '生成图片';
+      }
+    }
     el('f-prompt').placeholder = hasRef
       ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
       : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
@@ -455,11 +484,26 @@
       paintControls();
       var first = options.ratios.filter(function (r) { return r.key === '9:16'; })[0] || options.ratios[0];
       if (first) { el('ratio-hint').textContent = first.width + ' × ' + first.height; }
+      hasImageKey = !!data.has_image_key;
+      applyKeyGuard();
       if (!data.has_image_key) { toast('没有配置 IMAGE_API_KEY，出图会失败', true); }
       return data;
     }).catch(function (err) {
       toast('读取预设失败：' + err.message, true);
     });
+  }
+
+  // 未配置出图密钥时禁用生成按钮，而不是等用户点了才报错。
+  function applyKeyGuard() {
+    var button = el('btn-generate');
+    if (!button) { return; }
+    if (!hasImageKey && !state.busy) {
+      button.disabled = true;
+      button.textContent = '未配置出图密钥';
+    } else if (!state.busy) {
+      button.disabled = false;
+      updatePromptMode();
+    }
   }
 
   /* ---------------- 参考图 ---------------- */
@@ -630,6 +674,9 @@
         '<div class="tile-bar">' +
           '<b>' + esc(meta) + '</b>' +
           '<span class="tile-tools">' +
+            '<button class="icon-btn" title="复用参数" data-reuse="' + esc(item.id) + '">' +
+              '<svg viewBox="0 0 24 24"><path d="M4 8h9l-2.5-2.5M20 16h-9l2.5 2.5"/><circle cx="18" cy="8" r="2.4"/><circle cx="6" cy="16" r="2.4"/></svg>' +
+            '</button>' +
             '<button class="icon-btn" title="下载" data-download="' + esc(item.url) + '" data-name="' + esc(item.file) + '">' +
               '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg>' +
             '</button>' +
@@ -665,6 +712,7 @@
   function loadHistory() {
     return api('/api/images/history?limit=40')
       .then(function (rows) {
+        historyRows = rows || [];
         if (state.tab === 'history') { renderHistory(rows); }
         return rows;
       })
@@ -679,7 +727,7 @@
     }
     if (tab === 'history') {
       api('/api/images/history?limit=40')
-        .then(renderHistory)
+        .then(function (rows) { historyRows = rows || []; renderHistory(rows); })
         .catch(function (err) { toast('读取历史失败：' + err.message, true); });
     } else if (lastItems.length) {
       renderResults({ items: lastItems });
@@ -694,6 +742,56 @@
     el('lightbox-img').src = url;
     el('lightbox-meta').textContent = meta || '';
     el('lightbox').classList.add('open');
+  }
+
+  // 从一条历史记录里把提示词、画风、尺寸、质量、模型、种子回填到左侧面板，
+  // 让用户能"照上次再来一张"或微调后重试。
+  function restoreParams(imageId) {
+    var rows = historyRows.concat(lastItems);
+    var item = null;
+    for (var i = 0; i < rows.length; i += 1) {
+      if (rows[i] && rows[i].id === imageId) { item = rows[i]; break; }
+    }
+    if (!item) { toast('找不到这条历史参数', true); return; }
+
+    el('f-prompt').value = item.prompt || '';
+    el('f-negative').value = item.negative_prompt || '';
+    if (item.style) { state.style = item.style; }
+    if (item.quality) { state.quality = item.quality; }
+    if (item.model) {
+      // 历史里存的是完整模型名（如 flux-3-image-klein），要映射回预设 key。
+      var matched = null;
+      options.models.forEach(function (m) {
+        if (m.key === item.model || m.label === item.model) { matched = m.key; }
+      });
+      // 已知别名兜底
+      if (!matched) {
+        if (/klein/.test(item.model)) { matched = 'klein'; }
+        else if (/schnell/.test(item.model)) { matched = 'schnell'; }
+        else if (/dev/.test(item.model)) { matched = 'dev'; }
+      }
+      if (matched) { state.model = matched; }
+    }
+    // 尺寸：历史里存的是宽高，回推成最接近的预设比例。
+    if (item.width && item.height) {
+      var best = null;
+      options.ratios.forEach(function (r) {
+        if (r.width === item.width && r.height === item.height) { best = r; }
+      });
+      if (best) {
+        state.ratio = best.key;
+        el('ratio-hint').textContent = best.width + ' × ' + best.height;
+      }
+    }
+    el('f-seed').value = String(item.seed || 0);
+    state.count = 1;
+    state.reference = '';
+    clearReference();
+    paintControls();
+    updatePromptCount();
+    updatePromptMode();
+    toast('已回填参数，可以再生成一次');
+    switchView('studio');
   }
 
   function bindGallery() {
@@ -720,8 +818,14 @@
             var tile = del.closest('.tile');
             if (tile) { tile.remove(); }
             toast('已删除');
+            loadHistory();
           })
           .catch(function (err) { toast('删除失败：' + err.message, true); });
+        return;
+      }
+      var reuse = event.target.closest('[data-reuse]');
+      if (reuse) {
+        restoreParams(reuse.getAttribute('data-reuse'));
       }
     });
 
@@ -732,6 +836,280 @@
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') { el('lightbox').classList.remove('open'); }
+    });
+  }
+
+  /* ---------------- 配音工作区 ---------------- */
+
+  var AUDIO_SAMPLES = [
+    '大家好，欢迎来到本期内容。今天我们用三分钟，把这件事讲清楚。',
+    '产品已经上线，点击下方链接即可体验。',
+    '这个开场白适合口播：先抛问题，再给答案，最后留个钩子。'
+  ];
+
+  function openAudioWorkspace() {
+    el('audio-title').textContent = TOOLS['voice-tts'].name;
+    el('audio-eyebrow').textContent = TOOLS['voice-tts'].name;
+    renderAudioSamples();
+    updateAudioCount();
+    loadAudioVoices();
+    loadAudioHistory();
+    switchView('audio');
+  }
+
+  function renderAudioSamples() {
+    var box = el('a-samples');
+    if (!box) { return; }
+    box.innerHTML = AUDIO_SAMPLES.map(function (text) {
+      return '<button class="sample-chip" data-audio-sample="' + esc(text) + '">' + esc(text) + '</button>';
+    }).join('');
+  }
+
+  function updateAudioCount() {
+    el('a-count').textContent = String((el('a-text').value || '').length);
+  }
+
+  function loadAudioVoices() {
+    return api('/api/audio/voices').then(function (data) {
+      state.audioVoices = data.voices || [];
+      var select = el('a-voice');
+      select.innerHTML = state.audioVoices.map(function (v) {
+        return '<option value="' + esc(v.id) + '">' + esc(v.label) + '</option>';
+      }).join('');
+      return data;
+    }).catch(function (err) {
+      toast('读取音色失败：' + err.message, true);
+    });
+  }
+
+  function audioItemHtml(item) {
+    var dur = (item.duration_ms / 1000).toFixed(1);
+    return '' +
+      '<div class="audio-item" data-audio-id="' + esc(item.id) + '">' +
+        '<div class="audio-meta">' +
+          '<div class="audio-title">' + esc(item.text) + '</div>' +
+          '<div class="audio-sub">' + esc(item.voice) + ' · 语速 ' + esc(item.rate) + ' · ' + dur + ' 秒</div>' +
+        '</div>' +
+        '<div class="inline-row">' +
+          '<audio controls preload="none" src="' + esc(item.url) + '"></audio>' +
+          '<button class="icon-btn" title="下载" data-audio-download="' + esc(item.url) + '" data-name="' + esc(item.file) + '">' +
+            '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg>' +
+          '</button>' +
+          '<button class="icon-btn" title="删除" data-audio-delete="' + esc(item.id) + '">' +
+            '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M8 7l1 12h6l1-12"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderAudioItems(items) {
+    var list = el('audio-list');
+    var empty = el('audio-empty');
+    state.audioItems = items || [];
+    el('a-result-title').textContent = items.length ? ('配音记录 · ' + items.length + ' 条') : '还没有配音';
+    if (!items.length) { list.hidden = true; empty.hidden = false; return; }
+    empty.hidden = true;
+    list.hidden = false;
+    list.innerHTML = items.map(audioItemHtml).join('');
+  }
+
+  function loadAudioHistory() {
+    return api('/api/audio/history?limit=30')
+      .then(function (rows) { renderAudioItems(rows); return rows; })
+      .catch(function () { return []; });
+  }
+
+  function generateAudio() {
+    if (state.audioBusy) { return; }
+    var text = (el('a-text').value || '').trim();
+    if (!text) { toast('先写点要念的文案', true); el('a-text').focus(); return; }
+    var voice = el('a-voice').value || '';
+    var rate = Number(el('a-rate').value) || 0;
+    var volume = Number(el('a-volume').value) || 0;
+
+    state.audioBusy = true;
+    var button = el('btn-audio-generate');
+    button.disabled = true;
+    button.textContent = '合成中…';
+    el('a-status').textContent = '正在合成语音，通常 2–8 秒';
+
+    api('/api/audio/tts', { method: 'POST', body: { text: text, voice: voice, rate: rate, volume: volume } })
+      .then(function (item) {
+        var items = [item].concat(state.audioItems.filter(function (row) { return row.id !== item.id; }));
+        renderAudioItems(items);
+        toast('合成完成，' + (item.duration_ms / 1000).toFixed(1) + ' 秒');
+        loadAudioHistory();
+      })
+      .catch(function (err) { toast('合成失败：' + err.message, true); })
+      .then(function () {
+        state.audioBusy = false;
+        button.disabled = false;
+        button.textContent = '合成语音';
+        el('a-status').textContent = '';
+      });
+  }
+
+  function bindAudioWorkspace() {
+    el('btn-audio-back').addEventListener('click', function () {
+      renderCategory(state.cat || 'audio');
+      switchView('home');
+    });
+    el('a-text').addEventListener('input', updateAudioCount);
+    el('a-text').addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { generateAudio(); }
+    });
+    el('a-rate').addEventListener('input', function () { el('a-rate-val').textContent = el('a-rate').value; });
+    el('a-volume').addEventListener('input', function () { el('a-volume-val').textContent = el('a-volume').value; });
+    el('a-samples').addEventListener('click', function (event) {
+      var chip = event.target.closest('[data-audio-sample]');
+      if (!chip) { return; }
+      el('a-text').value = chip.getAttribute('data-audio-sample');
+      updateAudioCount();
+      el('a-text').focus();
+    });
+    el('btn-audio-generate').addEventListener('click', generateAudio);
+
+    var list = el('audio-list');
+    list.addEventListener('click', function (event) {
+      var download = event.target.closest('[data-audio-download]');
+      if (download) {
+        var link = document.createElement('a');
+        link.href = download.getAttribute('data-audio-download');
+        link.download = download.getAttribute('data-name') || 'speech.wav';
+        document.body.appendChild(link); link.click(); link.remove();
+        return;
+      }
+      var del = event.target.closest('[data-audio-delete]');
+      if (del) {
+        var id = del.getAttribute('data-audio-delete');
+        api('/api/audio/' + encodeURIComponent(id), { method: 'DELETE' })
+          .then(function () {
+            var row = del.closest('.audio-item');
+            if (row) { row.remove(); }
+            toast('已删除');
+            loadAudioHistory();
+          })
+          .catch(function (err) { toast('删除失败：' + err.message, true); });
+      }
+    });
+  }
+
+  /* ---------------- 字幕工作区 ---------------- */
+
+  var SUB_MODES = [
+    { key: 'sentence', label: '整句' },
+    { key: 'word', label: '逐词' }
+  ];
+
+  function openSubtitleWorkspace() {
+    el('subtitle-title').textContent = TOOLS['subtitle'].name;
+    el('subtitle-eyebrow').textContent = TOOLS['subtitle'].name;
+    renderSubModes();
+    updateSubCount();
+    switchView('subtitle');
+  }
+
+  function renderSubModes() {
+    var box = el('s-mode');
+    if (!box) { return; }
+    box.innerHTML = SUB_MODES.map(function (m) {
+      var active = m.key === state.subMode ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-sub-mode="' + esc(m.key) + '">' + esc(m.label) + '</button>';
+    }).join('');
+  }
+
+  function updateSubCount() {
+    el('s-count').textContent = String((el('s-text').value || '').length);
+  }
+
+  function cueTime(ms) {
+    var total = Math.max(0, ms || 0);
+    var m = Math.floor(total / 60000);
+    var s = Math.floor((total % 60000) / 1000);
+    var cs = Math.floor((total % 1000) / 10);
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + '.' + (cs < 10 ? '0' : '') + cs;
+  }
+
+  function renderSubtitleResult(item) {
+    var panel = el('subtitle-panel');
+    var empty = el('subtitle-empty');
+    state.subResult = item;
+    if (!item) { panel.hidden = true; empty.hidden = false; return; }
+    empty.hidden = true;
+    panel.hidden = false;
+    el('s-result-title').textContent = '共 ' + item.cue_count + ' 条 · ' + (item.duration_ms / 1000).toFixed(1) + ' 秒';
+
+    var buttons = ['ass', 'srt', 'vtt'].map(function (ext) {
+      var url = (item.urls && item.urls[ext]) || '';
+      return '<button class="btn btn-secondary btn-sm" data-sub-download="' + esc(url) + '" data-name="' + esc(item.base) + '.' + ext + '">下载 ' + ext.toUpperCase() + '</button>';
+    }).join('');
+
+    var rows = (item.cues || []).map(function (cue) {
+      return '<div class="cue-row"><span class="cue-time">' + cueTime(cue.start_ms) + ' → ' + cueTime(cue.end_ms) + '</span>' +
+        '<span class="cue-text">' + esc(cue.text) + '</span></div>';
+    }).join('');
+
+    panel.innerHTML = '' +
+      '<div class="subtitle-toolbar">' +
+        '<span class="subtle">' + esc(item.mode === 'word' ? '逐词切分' : '整句切分') + ' · 每行 ' + item.max_chars + ' 字</span>' +
+        buttons +
+      '</div>' +
+      '<div class="cue-list">' + rows + '</div>';
+  }
+
+  function buildSubtitle() {
+    if (state.subBusy) { return; }
+    var text = (el('s-text').value || '').trim();
+    if (!text) { toast('先贴一段口播稿', true); el('s-text').focus(); return; }
+    var maxChars = Number(el('s-maxchars').value) || 16;
+
+    state.subBusy = true;
+    var button = el('btn-subtitle-build');
+    button.disabled = true;
+    button.textContent = '生成中…';
+    el('s-status').textContent = '正在断句…';
+
+    api('/api/subtitle/build', { method: 'POST', body: { text: text, mode: state.subMode, max_chars: maxChars } })
+      .then(function (item) {
+        renderSubtitleResult(item);
+        toast('生成完成，共 ' + item.cue_count + ' 条');
+      })
+      .catch(function (err) { toast('生成失败：' + err.message, true); })
+      .then(function () {
+        state.subBusy = false;
+        button.disabled = false;
+        button.textContent = '生成字幕';
+        el('s-status').textContent = '';
+      });
+  }
+
+  function bindSubtitleWorkspace() {
+    el('btn-subtitle-back').addEventListener('click', function () {
+      renderCategory(state.cat || 'audio');
+      switchView('home');
+    });
+    el('s-text').addEventListener('input', updateSubCount);
+    el('s-text').addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { buildSubtitle(); }
+    });
+    el('s-mode').addEventListener('click', function (event) {
+      var item = event.target.closest('[data-sub-mode]');
+      if (!item) { return; }
+      state.subMode = item.getAttribute('data-sub-mode');
+      renderSubModes();
+    });
+    el('s-maxchars').addEventListener('input', function () {
+      state.subMaxChars = Number(el('s-maxchars').value) || 16;
+      el('s-maxchars-val').textContent = String(state.subMaxChars);
+    });
+    el('btn-subtitle-build').addEventListener('click', buildSubtitle);
+    el('subtitle-panel').addEventListener('click', function (event) {
+      var download = event.target.closest('[data-sub-download]');
+      if (!download) { return; }
+      var link = document.createElement('a');
+      link.href = download.getAttribute('data-sub-download');
+      link.download = download.getAttribute('data-name') || 'subtitle.txt';
+      document.body.appendChild(link); link.click(); link.remove();
     });
   }
 
@@ -777,6 +1155,8 @@
     bindNav();
     bindDropzone();
     bindGallery();
+    bindAudioWorkspace();
+    bindSubtitleWorkspace();
     el('f-prompt').addEventListener('input', updatePromptCount);
     el('btn-generate').addEventListener('click', generate);
     el('btn-dice').addEventListener('click', function () {
@@ -794,6 +1174,8 @@
     renderSamples();
     loadOptions();
     loadHistory();
+    loadAudioVoices();
+    el('s-maxchars-val').textContent = String(state.subMaxChars);
 
     try {
       var params = new URLSearchParams(window.location.search);
