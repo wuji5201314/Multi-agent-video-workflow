@@ -12,6 +12,28 @@
 
 一句话区别：**MPT 选定参数后只能一口气跑完；本项目每一步产出后都停在 GATE 上等你点头、等你改、或者等你打回。**
 
+## 在 IDEA / PyCharm 里一键启动（推荐）
+
+仓库根 `.run/` 目录里已内置可直接运行的配置（打开项目后，IDE 右上角运行下拉框就能看到）：
+
+| 运行配置 | 作用 | 访问地址 |
+| --- | --- | --- |
+| **后端 · Python 服务 (:8010)** | 起 Python FastAPI 后端（真实能力：出图/TTS/渲染/字幕） | http://127.0.0.1:8010/ |
+| **后端 · Python 开发热重载 (:8010)** | 同上，改代码自动重载（开发用） | http://127.0.0.1:8010/ |
+| **后端 · Java 启动器 (8080)** | 起 Spring Boot 启动器：托管前端静态页 + 把 `/api/**` 反代到 Python | http://127.0.0.1:8080/ |
+| **前端 · 打开页面** | 用 IDE 内置浏览器打开页面 | http://127.0.0.1:8010/ |
+| **合并 · 启动后端并打开页面** | 一次跑起 Python 后端 + 打开浏览器 | http://127.0.0.1:8010/ |
+
+**三种启动方式，按需选一：**
+
+- **只想看效果**：跑 `后端 · Python 服务 (:8010)`，浏览器打开 http://127.0.0.1:8010/ 即可（前端由后端静态托管，零构建）。
+- **想走 Java 后端 + 前端**：先跑 `后端 · Python 服务 (:8010)`，再跑 `后端 · Java 启动器 (8080)`，打开 http://127.0.0.1:8080/ 。前端所有 `/api` 请求由 Java 启动器透传到 Python，前端无需改任何地址。
+- **命令行**（不走 IDE）：`cd backend-python` 后 `.\.venv\Scripts\python.exe run.py --port 8010`（或 `scripts\serve.py --port 8010`）。
+
+**首次在 IDEA 打开时若未识别解释器**：`File → Project Structure → SDKs` 添加 `backend-python\.venv\Scripts\python.exe`（Python 3.13），并把项目 SDK 指到它。`.idea` 里已把源码根设为 `backend-python/src`。
+
+> 说明：`backend-java/aimedia-module` 是对照模块，依赖 `yq-admin` 父工程的 `com.yanque.common.*`，**不能独立构建/启动**（IDEA 里飘红属预期）。`backend-java/standalone-launcher` 是与之独立、自包含的 Spring Boot 启动器，专门用来在 IDEA 里一键起 Java 半边并托管前端。
+
 ## 快速开始
 
 ```powershell

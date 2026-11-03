@@ -94,3 +94,7 @@ desktop.ini
 
 # ================= 例外：文档要用的图 =================
 !docs/screenshots/*.png
+
+# Java standalone launcher 构建产物
+backend-java/standalone-launcher/target/
+

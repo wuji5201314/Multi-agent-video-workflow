@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="后端 · Java 启动器 (8080)" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.yanque.launcher.StandaloneLauncherApplication" />
+    <module name="standalone-launcher" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/backend-java/standalone-launcher" />
+    <option name="VM_PARAMETERS" value="" />
+    <option name="PROGRAM_PARAMETERS" value="" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
