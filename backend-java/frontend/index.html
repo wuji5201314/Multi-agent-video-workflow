@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
 <title>Multi-Agent Video Workflow · 创作工作台</title>
-<link rel="stylesheet" href="/app.css?v=12" />
+<link rel="stylesheet" href="/app.css?v=15" />
 </head>
 <body>
 
@@ -325,6 +325,141 @@
     </div>
   </section>
 
+
+  <!-- ============ 文案工作区 ============ -->
+  <section class="view" id="view-copy">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-copy-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="copy-title">文案工坊</div>
+        <div class="panel-desc">输入产品/主题，一键生成详情页文案、口播稿、标题或仿写。</div>
+
+        <div class="field-block">
+          <div class="field-label">文案类型</div>
+          <div class="segmented" id="c-kind"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">主题 / 产品</div>
+          <textarea id="c-topic" class="textarea" rows="4" placeholder="例如：一款便携手冲壶，卖点轻、保温、单手操作，面向咖啡爱好者"></textarea>
+          <div class="field-hint"><span id="c-count">0</span> / 2000 字</div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">语气风格</div>
+          <div class="segmented" id="c-style"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">补充要求 <span class="field-opt">可选</span></div>
+          <textarea id="c-extra" class="textarea" rows="2" placeholder="例如：控制在 40 秒；突出性价比；面向宝妈人群"></textarea>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-copy-write">生成文案</button>
+        <div class="gen-status" id="c-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="copy-eyebrow">输出</div>
+          <div class="result-title" id="c-result-title">还没有文案</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="copy-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <path d="M8 6h9M8 12h9M8 18h5"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边填好主题，点生成文案</div>
+          <div class="subtle">调用大模型直接产出可用文案，结果会自动存进「我的文案」</div>
+        </div>
+        <div class="copy-panel" id="copy-panel" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 视频编辑工作区 ============ -->
+  <section class="view" id="view-edit">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-edit-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="edit-title">视频编辑</div>
+        <div class="panel-desc">上传一段素材，本地用 ffmpeg 裁剪、转竖屏、变速，不上传云端。</div>
+
+        <div class="field-block">
+          <div class="field-label">素材 <span class="field-opt">mp4 / mov / mkv，≤500MB</span></div>
+          <div class="dropzone" id="edit-dropzone">
+            <input type="file" id="e-file" accept="video/*" hidden />
+            <div class="dropzone-inner" id="edit-dropzone-inner">
+              <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#86868b;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              <div>点击或拖入素材</div>
+            </div>
+            <div class="dropzone-preview" id="edit-preview" hidden></div>
+          </div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">处理方式</div>
+          <div class="segmented" id="e-action"></div>
+        </div>
+
+        <div class="field-block" id="e-trim-block" hidden>
+          <div class="field-label">裁剪区间（秒）</div>
+          <div class="inline-row">
+            <input type="number" id="e-start" class="text-input" value="0" min="0" step="0.5" placeholder="开始" />
+            <input type="number" id="e-end" class="text-input" value="0" min="0" step="0.5" placeholder="结束(0=到结尾)" />
+          </div>
+        </div>
+
+        <div class="field-block" id="e-width-block">
+          <div class="field-label">目标宽度 <span class="field-opt"><span id="e-width-val">1080</span> px</span></div>
+          <input type="range" id="e-width" class="range" min="480" max="1920" step="60" value="1080" />
+        </div>
+
+        <div class="field-block" id="e-speed-block" hidden>
+          <div class="field-label">速度 <span class="field-opt"><span id="e-speed-val">1.0</span> x</span></div>
+          <input type="range" id="e-speed" class="range" min="50" max="200" step="10" value="100" />
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-edit-run">开始处理</button>
+        <div class="gen-status" id="e-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="edit-eyebrow">输出</div>
+          <div class="result-title" id="e-result-title">还没有处理结果</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="edit-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 9l4-2v10l-4-2"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边上传素材，选处理方式</div>
+          <div class="subtle">处理在本机 ffmpeg 完成，结果可预览下载，记录会存进「我的编辑」</div>
+        </div>
+        <div class="edit-panel" id="edit-panel" hidden></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 视频工作区 ============ -->
   <section class="view" id="view-video">
     <aside class="sidebar">
@@ -413,7 +548,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="/app.js?v=12"></script>
-<script src="/studio.js?v=12"></script>
+<script src="/app.js?v=15"></script>
+<script src="/studio.js?v=15"></script>
 </body>
 </html>

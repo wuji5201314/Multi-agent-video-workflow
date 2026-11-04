@@ -1,4 +1,4 @@
-﻿/* 工作台前端：分类页（面包屑/标题/提示/分组卡片）+ 图片工具工作区。
+/* 工作台前端：分类页（面包屑/标题/提示/分组卡片）+ 图片工具工作区。
    后端约定：
    GET  /api/images/options   预设
    POST /api/images/generate  生成
@@ -77,9 +77,9 @@
       tags: ['已接通', '默认 9:16']
     },
     'edit-clip': {
-      name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false, tone: 'blue',
-      desc: '导入长素材，按脚本自动切段、配字幕、卡点成片。',
-      tags: ['即将上线']
+      name: '视频编辑', sub: '裁剪 转竖屏 变速', icon: 'edit', ready: true, mode: 'edit', tone: 'blue',
+      desc: '上传素材，本地裁剪时长、转竖屏、变速、导出音频。',
+      tags: ['已接通', '本地 ffmpeg']
     },
     'edit-upscale': {
       name: '视频高清放大', sub: '2–4 倍', icon: 'upscale', ready: false, tone: 'purple',
@@ -102,9 +102,9 @@
       tags: ['已接通', 'ASS · SRT · VTT']
     },
     'copy-detail': {
-      name: '详情页文案', sub: '成交型', icon: 'copy', ready: false, tone: 'purple',
-      desc: '按产品卖点写详情页文案与分镜脚本。',
-      tags: ['即将上线']
+      name: '文案工坊', sub: '详情·口播·标题·仿写', icon: 'copy', ready: true, mode: 'copy', tone: 'purple',
+      desc: '输入产品/主题，生成详情页文案、口播稿、标题或仿写。',
+      tags: ['已接通', '大模型']
     },
     'copy-rewrite': {
       name: '文案仿写', sub: '去重改写', icon: 'copy', ready: false, tone: 'purple',
@@ -149,7 +149,7 @@
       desc: '对已有素材做剪辑、放大与替换，不重新生成画面。',
       notice: '上传前请确认素材格式为 mp4 / mov，单个文件建议不超过 500MB。',
       groups: [
-        { name: '剪辑', accent: '#5ac8fa', tools: ['edit-clip'] },
+        { name: '剪辑与转换', accent: '#5ac8fa', tools: ['edit-clip'] },
         { name: '画质', accent: '#bf5af2', tools: ['edit-upscale'] }
       ]
     },
@@ -172,6 +172,16 @@
         { name: '成交与口播', accent: '#bf5af2', tools: ['copy-detail', 'copy-rewrite'] }
       ]
     }
+  };
+
+  // 左侧导航点击后直达的主工作区：不再先停在"功能卡片墙"分类页。
+  // 分类页（含最近作品/概览）仍可从这里的面包屑/返回进入，或点首页卡片墙。
+  var CAT_PRIMARY_TOOL = {
+    image: 'image-generate',
+    video: 'video-pipeline',
+    audio: 'voice-tts',
+    edit: 'edit-clip',
+    text: 'copy-detail'
   };
 
   /* ---------------- 状态 ---------------- */
@@ -197,7 +207,15 @@
     subMode: 'sentence',
     subMaxChars: 16,
     subBusy: false,
-    subResult: null
+    subResult: null,
+    // 文案工作台
+    copyKind: 'detail',
+    copyStyle: 'none',
+    copyBusy: false,
+    // 视频编辑工作台
+    editAction: 'vertical',
+    editSource: '',
+    editBusy: false
   };
   var lastItems = [];
   var historyRows = [];
@@ -408,8 +426,44 @@
       recentTitle: '我的字幕稿',
       recent: function () { return loadSubtitleRecent(); }
     },
-    edit: { toolsTitle: '编辑功能', stat: null, recentTitle: '', recent: null },
-    text: { toolsTitle: '文案功能', stat: null, recentTitle: '', recent: null }
+    edit: {
+      toolsTitle: '编辑功能',
+      stat: function () {
+        return api('/api/edit/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var acts = {};
+          for (var i = 0; i < list.length; i += 1) { acts[list[i].action] = 1; }
+          return [
+            { num: list.length, label: '编辑记录', accent: true },
+            { num: Object.keys(acts).length, label: '用过处理', accent: false },
+            { num: list.length, label: '产物文件', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的编辑',
+      recent: function () { return loadEditRecent(); }
+    },
+    text: {
+      toolsTitle: '文案功能',
+      stat: function () {
+        return api('/api/copy/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var kinds = {};
+          var chars = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            kinds[list[i].kind] = 1;
+            chars += (list[i].text || '').length;
+          }
+          return [
+            { num: list.length, label: '文案稿', accent: true },
+            { num: Object.keys(kinds).length, label: '文案类型', accent: false },
+            { num: chars, label: '累计字数', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的文案',
+      recent: function () { return loadCopyRecent(); }
+    }
   };
 
   function renderCategoryPanels(catKey) {
@@ -623,6 +677,329 @@
     });
   }
   var subtitleRecentRows = [];
+
+  /* ---------------- 文案 / 编辑 最近记录 ---------------- */
+  function loadCopyRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/copy/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 份'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有文案。点下面「文案工坊」生成一份，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (c) {
+        var kindLabel = (COPY_KIND_LABELS[c.kind] || c.kind || '文案');
+        return '<button class="au-card au-card-click" data-open-copy="' + esc(c.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((c.topic || '文案').slice(0, 24)) + '</span>' +
+          '<span class="au-card-badge">' + esc(kindLabel) + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc((c.text || '').length + ' 字') + '</span> · ' + esc(timeAgo(c.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      copyRecentRows = list;
+    });
+  }
+  var copyRecentRows = [];
+  var COPY_KIND_LABELS = { detail: '详情页', oral: '口播稿', rewrite: '仿写', title: '标题' };
+
+  function loadEditRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/edit/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 段'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有编辑记录。点下面「视频编辑」上传素材处理，结果会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (e) {
+        var label = (EDIT_ACTION_LABELS[e.action] || e.action || '处理');
+        var dur = ((e.duration_ms || 0) / 1000).toFixed(1) + 's';
+        return '<button class="au-card au-card-click" data-open-edit="' + esc(e.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc(label) + '</span>' +
+          '<span class="au-card-badge">' + esc(dur) + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc((e.size || 0) ? Math.round((e.size || 0) / 1024) + ' KB' : '') + '</span> · ' + esc(timeAgo(e.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      editRecentRows = list;
+    });
+  }
+  var editRecentRows = [];
+  var EDIT_ACTION_LABELS = { trim: '裁剪时长', vertical: '转竖屏', scale: '缩放', mute: '去声音', extract: '导出音频', speed: '变速' };
+
+  /* ---------------- 文案工作区 ---------------- */
+  var COPY_KINDS = [
+    { key: 'detail', label: '详情页' },
+    { key: 'oral', label: '口播稿' },
+    { key: 'title', label: '标题' },
+    { key: 'rewrite', label: '仿写' }
+  ];
+  var COPY_STYLES = [
+    { key: 'none', label: '默认' },
+    { key: 'hard_sell', label: '强营销' },
+    { key: 'soft', label: '种草' },
+    { key: 'professional', label: '专业' },
+    { key: 'fun', label: '轻松' }
+  ];
+
+  function openCopyWorkspace() {
+    el('copy-title').textContent = TOOLS['copy-detail'].name;
+    el('copy-eyebrow').textContent = '文案输出';
+    renderCopyKinds();
+    renderCopyStyles();
+    updateCopyCount();
+    switchView('copy');
+  }
+
+  function renderCopyKinds() {
+    var box = el('c-kind');
+    if (!box) { return; }
+    box.innerHTML = COPY_KINDS.map(function (k) {
+      var active = k.key === state.copyKind ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-copy-kind="' + esc(k.key) + '">' + esc(k.label) + '</button>';
+    }).join('');
+  }
+
+  function renderCopyStyles() {
+    var box = el('c-style');
+    if (!box) { return; }
+    box.innerHTML = COPY_STYLES.map(function (k) {
+      var active = k.key === state.copyStyle ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-copy-style="' + esc(k.key) + '">' + esc(k.label) + '</button>';
+    }).join('');
+  }
+
+  function updateCopyCount() {
+    var c = el('c-count');
+    if (c) { c.textContent = String((el('c-topic').value || '').length); }
+  }
+
+  function renderCopyResult(item) {
+    var panel = el('copy-panel');
+    var empty = el('copy-empty');
+    if (empty) { empty.hidden = true; }
+    if (panel) { panel.hidden = false; }
+    el('c-result-title').textContent = (COPY_KIND_LABELS[item.kind] || '文案') + ' · ' + item.topic.slice(0, 16);
+    var esc_text = esc(item.text || '').replace(/\n/g, '<br>');
+    panel.innerHTML =
+      '<div class="copy-meta">' +
+        '<span class="copy-badge">' + esc(COPY_KIND_LABELS[item.kind] || item.kind) + '</span>' +
+        '<span class="subtle">' + esc(item.model || '') + ' · ' + esc((item.elapsed_ms || 0) / 1000 + 's') + '</span>' +
+      '</div>' +
+      '<div class="copy-body" id="copy-body-text">' + esc_text + '</div>' +
+      '<div class="detail-actions">' +
+        '<button class="btn btn-secondary sm" data-copy-text>复制全文</button>' +
+      '</div>';
+  }
+
+  function generateCopy() {
+    var topic = (el('c-topic').value || '').trim();
+    if (!topic) { toast('请先填写主题/产品'); el('c-topic').focus(); return; }
+    if (state.copyBusy) { return; }
+    state.copyBusy = true;
+    var btn = el('btn-copy-write');
+    btn.disabled = true;
+    el('c-status').textContent = '生成中…（大模型约需 10-60 秒）';
+    api('/api/copy/write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: topic,
+        kind: state.copyKind,
+        style: state.copyStyle,
+        extra: (el('c-extra').value || '').trim()
+      })
+    }).then(function (res) {
+      var item = res.item || res;
+      renderCopyResult(item);
+      el('c-status').textContent = '已生成';
+      toast('文案已生成');
+    }).catch(function (err) {
+      el('c-status').textContent = '生成失败';
+      toast('生成失败：' + (err.message || '网络错误'), true);
+    }).finally(function () {
+      state.copyBusy = false;
+      btn.disabled = false;
+    });
+  }
+
+  function bindCopyWorkspace() {
+    var back = el('btn-copy-back');
+    if (back) { back.addEventListener('click', function () { renderCategory('text'); switchView('home'); }); }
+    var kinds = el('c-kind');
+    if (kinds) { kinds.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-copy-kind]'); if (!b) { return; }
+      state.copyKind = b.getAttribute('data-copy-kind'); renderCopyKinds();
+    }); }
+    var styles = el('c-style');
+    if (styles) { styles.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-copy-style]'); if (!b) { return; }
+      state.copyStyle = b.getAttribute('data-copy-style'); renderCopyStyles();
+    }); }
+    var topic = el('c-topic');
+    if (topic) { topic.addEventListener('input', updateCopyCount); }
+    var btn = el('btn-copy-write');
+    if (btn) { btn.addEventListener('click', generateCopy); }
+    var panel = el('copy-panel');
+    if (panel) { panel.addEventListener('click', function (e) {
+      if (e.target.closest('[data-copy-text]')) {
+        var body = el('copy-body-text');
+        copyText(body ? body.innerText : '');
+      }
+    }); }
+  }
+
+  /* ---------------- 视频编辑工作区 ---------------- */
+  var EDIT_ACTIONS = [
+    { key: 'trim', label: '裁剪时长' },
+    { key: 'vertical', label: '转竖屏' },
+    { key: 'scale', label: '缩放' },
+    { key: 'mute', label: '去声音' },
+    { key: 'extract', label: '导出音频' },
+    { key: 'speed', label: '变速' }
+  ];
+
+  function openEditWorkspace() {
+    if (el('edit-title')) { el('edit-title').textContent = TOOLS['edit-clip'].name; }
+    renderEditActions();
+    applyEditActionUi();
+    switchView('edit');
+  }
+
+  function renderEditActions() {
+    var box = el('e-action');
+    if (!box) { return; }
+    box.innerHTML = EDIT_ACTIONS.map(function (a) {
+      var active = a.key === state.editAction ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-edit-action="' + esc(a.key) + '">' + esc(a.label) + '</button>';
+    }).join('');
+  }
+
+  function applyEditActionUi() {
+    var a = state.editAction;
+    if (el('e-trim-block')) { el('e-trim-block').hidden = a !== 'trim'; }
+    if (el('e-width-block')) { el('e-width-block').hidden = (a !== 'vertical' && a !== 'scale'); }
+    if (el('e-speed-block')) { el('e-speed-block').hidden = a !== 'speed'; }
+    if (el('btn-edit-run')) { el('btn-edit-run').textContent = (a === 'extract' ? '导出音频' : '开始处理'); }
+  }
+
+  function uploadEditFile(file) {
+    if (!file) { return; }
+    if (file.size > 500 * 1024 * 1024) { toast('素材超过 500MB', true); return; }
+    el('e-status').textContent = '上传中…';
+    api('/api/edit/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'video/mp4', 'x-filename': file.name },
+      body: file
+    }).then(function (res) {
+      state.editSource = res.source;
+      el('e-status').textContent = '已上传：' + file.name + '（' + Math.round(file.size / 1024) + ' KB）';
+      var prev = el('edit-preview');
+      var inner = el('edit-dropzone-inner');
+      if (prev) {
+        prev.hidden = false;
+        prev.innerHTML = '<video controls style="width:100%;border-radius:10px" src="/api/edit/uploads/' + esc(res.source) + '"></video>';
+      }
+      if (inner) { inner.hidden = true; }
+      toast('素材已上传');
+    }).catch(function (err) {
+      el('e-status').textContent = '上传失败';
+      toast('上传失败：' + (err.message || ''), true);
+    });
+  }
+
+  function runEdit() {
+    if (!state.editSource) { toast('请先上传素材'); return; }
+    if (state.editBusy) { return; }
+    state.editBusy = true;
+    var btn = el('btn-edit-run');
+    btn.disabled = true;
+    el('e-status').textContent = '处理中…';
+    var speed = (parseInt(el('e-speed').value, 10) || 100) / 100;
+    var payload = {
+      source: state.editSource,
+      action: state.editAction,
+      params: {
+        start: parseFloat(el('e-start').value) || 0,
+        end: parseFloat(el('e-end').value) || 0,
+        width: parseInt(el('e-width').value, 10) || 1080,
+        speed: speed
+      }
+    };
+    api('/api/edit/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      var item = res.item || res;
+      renderEditResult(item);
+      el('e-status').textContent = '处理完成';
+      toast('处理完成');
+    }).catch(function (err) {
+      el('e-status').textContent = '处理失败';
+      toast('处理失败：' + (err.message || ''), true);
+    }).finally(function () {
+      state.editBusy = false;
+      btn.disabled = false;
+    });
+  }
+
+  function renderEditResult(item) {
+    var panel = el('edit-panel');
+    var empty = el('edit-empty');
+    if (empty) { empty.hidden = true; }
+    if (panel) { panel.hidden = false; }
+    var label = EDIT_ACTION_LABELS[item.action] || item.action;
+    el('e-result-title').textContent = label + ' · ' + ((item.duration_ms || 0) / 1000).toFixed(1) + 's';
+    var media;
+    if (item.action === 'extract') {
+      media = '<audio controls style="width:100%" src="' + esc(item.url) + '"></audio>';
+    } else {
+      media = '<video controls style="width:100%;border-radius:12px;background:#000" src="' + esc(item.url) + '"></video>';
+    }
+    panel.innerHTML =
+      media +
+      '<div class="kv-row" style="margin-top:12px"><span class="kv-label">处理方式</span><span class="kv-value">' + esc(label) + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">时长</span><span class="kv-value">' + esc(((item.duration_ms || 0) / 1000).toFixed(1) + 's') + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">大小</span><span class="kv-value">' + esc(Math.round((item.size || 0) / 1024) + ' KB') + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">耗时</span><span class="kv-value">' + esc((item.elapsed_ms || 0) + ' ms') + '</span></div>' +
+      '<div class="detail-actions"><a class="btn btn-secondary sm" href="' + esc(item.url) + '" download>下载结果</a></div>';
+  }
+
+  function bindEditWorkspace() {
+    var back = el('btn-edit-back');
+    if (back) { back.addEventListener('click', function () { renderCategory('edit'); switchView('home'); }); }
+    var dz = el('edit-dropzone');
+    var fileInput = el('e-file');
+    if (dz && fileInput) {
+      dz.addEventListener('click', function (e) { if (e.target !== fileInput) { fileInput.click(); } });
+      fileInput.addEventListener('change', function () { uploadEditFile(fileInput.files[0]); });
+      dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('dragging'); });
+      dz.addEventListener('dragleave', function () { dz.classList.remove('dragging'); });
+      dz.addEventListener('drop', function (e) {
+        e.preventDefault(); dz.classList.remove('dragging');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) { uploadEditFile(e.dataTransfer.files[0]); }
+      });
+    }
+    var acts = el('e-action');
+    if (acts) { acts.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-edit-action]'); if (!b) { return; }
+      state.editAction = b.getAttribute('data-edit-action');
+      renderEditActions(); applyEditActionUi();
+    }); }
+    var width = el('e-width');
+    if (width) { width.addEventListener('input', function () { el('e-width-val').textContent = width.value; }); }
+    var speed = el('e-speed');
+    if (speed) { speed.addEventListener('input', function () { el('e-speed-val').textContent = ((parseInt(speed.value, 10) || 100) / 100).toFixed(1); }); }
+    var btn = el('btn-edit-run');
+    if (btn) { btn.addEventListener('click', runEdit); }
+  }
+
 
 
   /* ---------------- 作品详情页 ---------------- */
@@ -842,6 +1219,59 @@
     return m + ':' + (sec < 10 ? '0' + sec : sec);
   }
 
+  function openCopyDetail(c) {
+    if (!c) { toast('找不到这份文案', true); return; }
+    var kindLabel = COPY_KIND_LABELS[c.kind] || c.kind || '文案';
+    var styleLabel = '';
+    for (var i = 0; i < COPY_STYLES.length; i += 1) {
+      if (COPY_STYLES[i].key === c.style) { styleLabel = COPY_STYLES[i].label; break; }
+    }
+    var bodyHtml = esc(c.text || '').replace(/\n/g, '<br>');
+    var inner =
+      '<div class="detail-grid detail-grid-wide">' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc(kindLabel) + ' · ' + esc((c.topic || '').slice(0, 20)) + '</div>' +
+          '<div class="detail-meta-line">' + esc(kindLabel) + ' · ' + esc(styleLabel || '默认') + ' · ' + esc((c.text || '').length) + ' 字 · ' + esc(timeAgo(c.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('主题', c.topic || '—') +
+            detailKV('模型', c.model || '—', { mono: true }) +
+            detailKV('耗时', Math.round((c.elapsed_ms || 0) / 1000) + 's') +
+          '</div>' +
+          '<div class="detail-section-title">文案正文</div>' +
+          '<div class="copy-body">' + bodyHtml + '</div>' +
+          '<div class="detail-actions"><button class="btn btn-secondary sm" id="detail-copy-text">复制全文</button></div>' +
+        '</div>' +
+      '</div>';
+    detailShell('文案详情 · ' + kindLabel, inner);
+    var btn = el('detail-copy-text');
+    if (btn) { btn.addEventListener('click', function () { copyText(c.text || ''); }); }
+    switchView('detail');
+  }
+
+  function openEditDetail(e) {
+    if (!e) { toast('找不到这条编辑记录', true); return; }
+    var label = EDIT_ACTION_LABELS[e.action] || e.action || '处理';
+    var media = e.action === 'extract'
+      ? '<audio controls style="width:100%" src="' + esc(e.url) + '"></audio>'
+      : '<video controls style="width:100%;border-radius:12px;background:#000" src="' + esc(e.url) + '"></video>';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media">' + media + '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc(label) + '</div>' +
+          '<div class="detail-meta-line">' + esc(((e.duration_ms || 0) / 1000).toFixed(1)) + 's · ' + esc(Math.round((e.size || 0) / 1024)) + ' KB · ' + esc(timeAgo(e.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('处理方式', label) +
+            detailKV('源素材', e.source || '—', { mono: true }) +
+            detailKV('耗时', (e.elapsed_ms || 0) + ' ms') +
+          '</div>' +
+          '<div class="detail-actions"><a class="btn btn-secondary sm" href="' + esc(e.url) + '" download>下载结果</a></div>' +
+        '</div>' +
+      '</div>';
+    detailShell('编辑详情 · ' + label, inner);
+    switchView('detail');
+  }
+
   function backFromDetail() {
     switchView(detailReturnCat || 'home');
     renderCategory(detailReturnCat || 'home');
@@ -942,6 +1372,28 @@
         openSubtitleDetail(srow);
         return;
       }
+      var copyBtn = event.target.closest('[data-open-copy]');
+      if (copyBtn) {
+        detailReturnCat = 'text';
+        var cid = copyBtn.getAttribute('data-open-copy');
+        var crow = null;
+        for (var ci = 0; ci < copyRecentRows.length; ci += 1) {
+          if (String(copyRecentRows[ci].id) === String(cid)) { crow = copyRecentRows[ci]; break; }
+        }
+        openCopyDetail(crow);
+        return;
+      }
+      var editBtn = event.target.closest('[data-open-edit]');
+      if (editBtn) {
+        detailReturnCat = 'edit';
+        var eid = editBtn.getAttribute('data-open-edit');
+        var erow = null;
+        for (var ei = 0; ei < editRecentRows.length; ei += 1) {
+          if (String(editRecentRows[ei].id) === String(eid)) { erow = editRecentRows[ei]; break; }
+        }
+        openEditDetail(erow);
+        return;
+      }
     });
   }
 
@@ -949,12 +1401,15 @@
 
   function switchView(name) {
     // 分类页（image/edit/text 等）都渲染在 view-home 容器里，需归一到 home 才能正确显示。
-    var isCat = name !== 'studio' && name !== 'video' && name !== 'audio' && name !== 'subtitle' && name !== 'detail';
+    var isCat = name !== 'studio' && name !== 'video' && name !== 'audio' && name !== 'subtitle'
+      && name !== 'detail' && name !== 'copy' && name !== 'edit';
     el('view-home').classList.toggle('active', name === 'home' || isCat);
     el('view-studio').classList.toggle('active', name === 'studio');
     el('view-video').classList.toggle('active', name === 'video');
     el('view-audio').classList.toggle('active', name === 'audio');
     el('view-subtitle').classList.toggle('active', name === 'subtitle');
+    if (el('view-copy')) { el('view-copy').classList.toggle('active', name === 'copy'); }
+    if (el('view-edit')) { el('view-edit').classList.toggle('active', name === 'edit'); }
     if (el('view-detail')) { el('view-detail').classList.toggle('active', name === 'detail'); }
     el('btn-new-video').hidden = name !== 'video';
   }
@@ -1026,6 +1481,14 @@
     }
     if (tool.mode === 'subtitle') {
       openSubtitleWorkspace();
+      return;
+    }
+    if (tool.mode === 'copy') {
+      openCopyWorkspace();
+      return;
+    }
+    if (tool.mode === 'edit') {
+      openEditWorkspace();
       return;
     }
     state.tool = toolKey;
@@ -1980,6 +2443,14 @@
       var item = event.target.closest('[data-cat]');
       if (!item) { return; }
       var cat = item.getAttribute('data-cat');
+      // 有主工作区的分类：直接进参数/工作区，跳过功能卡片页
+      var primary = CAT_PRIMARY_TOOL[cat];
+      if (primary && TOOLS[primary] && TOOLS[primary].ready) {
+        state.cat = cat;
+        openTool(primary);
+        return;
+      }
+      // 首页 / 编辑 / 未接通分类：仍展示分类概览页
       renderCategory(cat);
       switchView('home');
     });
@@ -2051,6 +2522,8 @@
     bindGallery();
     bindAudioWorkspace();
     bindSubtitleWorkspace();
+    bindCopyWorkspace();
+    bindEditWorkspace();
     el('f-prompt').addEventListener('input', updatePromptCount);
     el('btn-generate').addEventListener('click', generate);
     el('btn-dice').addEventListener('click', function () {

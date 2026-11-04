@@ -1,4 +1,4 @@
-﻿"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
+"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
 
 from __future__ import annotations
 
@@ -18,6 +18,8 @@ from .config import get_settings
 from .runtime_settings import RuntimeSettingsStore
 from .audio import AudioStudio
 from .subtitle import SubtitleStudio
+from .copywriter import CopyStudio
+from .editor import EditStudio
 from .images import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -112,16 +114,20 @@ def create_app() -> FastAPI:
     studio = ImageStudio(settings)
     audio = AudioStudio(settings)
     subtitles = SubtitleStudio(settings)
+    copywriter = CopyStudio(settings)
+    editor = EditStudio(settings)
     app = FastAPI(title="Multi-Agent Video Workflow", version="0.2.0")
 
     def _rebuild(effective) -> None:
         """用户改了配置后，用新的 Settings 重建所有持有者。"""
-        nonlocal settings, service, studio, audio, subtitles
+        nonlocal settings, service, studio, audio, subtitles, copywriter, editor
         settings = effective
         service = PipelineService(settings)
         studio = ImageStudio(settings)
         audio = AudioStudio(settings)
         subtitles = SubtitleStudio(settings)
+        copywriter = CopyStudio(settings)
+        editor = EditStudio(settings)
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -452,6 +458,114 @@ def create_app() -> FastAPI:
             return FileResponse(subtitles.path_for(file_name))
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="字幕文件不存在") from exc
+
+    # ---------------- 文案工作台 ----------------
+    class CopyBody(BaseModel):
+        topic: str = Field(min_length=1, max_length=2000)
+        kind: str = "detail"
+        style: str = "none"
+        extra: str = ""
+
+    @app.get("/api/copy/options")
+    async def copy_options() -> dict[str, Any]:
+        return {"kinds": copywriter.kinds(), "styles": copywriter.styles()}
+
+    @app.post("/api/copy/write")
+    async def copy_write(request: Request) -> dict[str, Any]:
+        raw = await _read_json(request)
+        body = CopyBody(**raw)
+        try:
+            item = await copywriter.write(
+                body.topic, kind=body.kind, style=body.style, extra=body.extra
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"status": "ok", "item": asdict(item)}
+
+    @app.get("/api/copy/history")
+    async def copy_history(limit: int = 40) -> list[dict]:
+        return copywriter.history(limit)
+
+    @app.delete("/api/copy/{copy_id}")
+    async def copy_delete(copy_id: str) -> dict[str, bool]:
+        return {"deleted": copywriter.delete(copy_id)}
+
+    # ---------------- 视频编辑工作台 ----------------
+    @app.get("/api/edit/actions")
+    async def edit_actions() -> dict[str, Any]:
+        from .render.ffmpeg_tools import ffmpeg_executable
+
+        try:
+            ffmpeg_executable()
+            has_ffmpeg = True
+        except Exception:  # noqa: BLE001
+            has_ffmpeg = False
+        return {"actions": editor.actions(), "has_ffmpeg": has_ffmpeg}
+
+    @app.post("/api/edit/upload")
+    async def edit_upload(request: Request) -> dict[str, Any]:
+        ctype = request.headers.get("content-type", "")
+        data = await request.body()
+        suffix = ".mp4"
+        for ext in (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"):
+            if ext.encode() in data[:64] or ctype.endswith(ext):
+                suffix = ext
+                break
+        name = request.headers.get("x-filename", "")
+        if name and "." in name:
+            cand = "." + name.rsplit(".", 1)[-1].lower()
+            if cand in {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}:
+                suffix = cand
+        try:
+            saved = editor.save_upload(data, suffix)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"status": "ok", "source": saved, "size": len(data)}
+
+    @app.post("/api/edit/run")
+    async def edit_run(request: Request) -> dict[str, Any]:
+        raw = await _read_json(request)
+        source = str(raw.get("source") or "")
+        action = str(raw.get("action") or "vertical")
+        params = raw.get("params") or {}
+        if not source:
+            raise HTTPException(status_code=400, detail="缺少素材，请先上传")
+        try:
+            item = editor.edit(
+                source,
+                action,
+                start=float(params.get("start") or 0),
+                end=float(params.get("end") or 0),
+                width=int(params.get("width") or 1080),
+                speed=float(params.get("speed") or 1.0),
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"status": "ok", "item": asdict(item)}
+
+    @app.get("/api/edit/history")
+    async def edit_history(limit: int = 40) -> list[dict]:
+        return editor.history(limit)
+
+    @app.delete("/api/edit/{edit_id}")
+    async def edit_delete(edit_id: str) -> dict[str, bool]:
+        return {"deleted": editor.delete(edit_id)}
+
+    @app.get("/api/edit/files/{file_name}")
+    async def edit_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(editor.export_path(file_name))
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="文件不存在") from exc
+
+    @app.get("/api/edit/uploads/{file_name}")
+    async def edit_upload_file(file_name: str) -> FileResponse:
+        try:
+            return FileResponse(editor.upload_path(file_name))
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="文件不存在") from exc
 
     @app.middleware("http")
     async def no_cache_static(request: Request, call_next):

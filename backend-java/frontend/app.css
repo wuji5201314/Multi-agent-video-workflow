@@ -928,3 +928,12 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
 /* ============ 参数页头部（聚合工作区） ============ */
 .panel-preset{margin:2px 0 14px}
 .panel-preset .preset-row{display:flex;gap:8px;flex-wrap:wrap}
+/* ---- 文案工作区 / 视频编辑工作区 ---- */
+#view-copy.active, #view-edit.active { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 0; }
+.copy-panel { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
+.copy-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.copy-badge { font-size: 12px; font-weight: 600; color: #5e5ce6; background: rgba(94,92,230,.1); padding: 3px 10px; border-radius: 999px; }
+.copy-body { font-size: 15px; line-height: 1.85; color: var(--text); background: var(--surface); border: 1px solid rgba(0,0,0,.06); border-radius: 12px; padding: 18px 20px; white-space: normal; }
+.edit-panel { padding: 20px 22px; }
+@media (max-width: 1180px) { #view-copy.active, #view-edit.active { grid-template-columns: 360px minmax(0,1fr); } }
+@media (max-width: 900px) { #view-copy.active, #view-edit.active { grid-template-columns: 1fr; } }
