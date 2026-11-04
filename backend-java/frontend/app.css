@@ -972,3 +972,7 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   .fin-card{grid-template-columns:1fr}
   .fin-video{max-height:420px}
 }
+/* ---------- 任务卡：异步生成中的进度条 ---------- */
+.task-progress{margin:7px 0 2px;height:3px;border-radius:2px;background:rgba(0,113,227,.12);overflow:hidden}
+.task-progress-bar{height:100%;width:38%;border-radius:2px;background:var(--blue,#0071e3);animation:taskProgress 1.25s ease-in-out infinite}
+@keyframes taskProgress{0%{margin-left:-38%}100%{margin-left:100%}}

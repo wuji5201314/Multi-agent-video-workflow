@@ -1,4 +1,4 @@
-/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
+﻿/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
    与后端约定：
    - GET  /api/health
    - GET  /api/tasks
@@ -119,15 +119,23 @@
       return;
     }
     var html = '';
+    var currentId = state.task ? (state.task.task_id != null ? state.task.task_id : state.task.id) : null;
     state.tasks.forEach(function (task) {
+      var tid = task.task_id != null ? task.task_id : task.id;
       var badge = TASK_BADGE[task.status] || ['idle', task.status];
-      var active = state.task && state.task.task_id === task.id ? ' active' : '';
-      html += '<div class="task-item' + active + '" data-task="' + task.id + '">';
+      var active = currentId != null && currentId === tid ? ' active' : '';
+      // 生成中的任务加一个轻微的进度条，让"异步正在跑"看得见
+      var prog = '';
+      if (task.status === 'RUNNING') {
+        prog = '<div class="task-progress"><div class="task-progress-bar"></div></div>';
+      }
+      html += '<div class="task-item' + active + '" data-task="' + tid + '">';
       html += '<div class="task-item-head">';
-      html += '<span class="task-id">#' + task.id + '</span>';
+      html += '<span class="task-id">#' + tid + '</span>';
       html += '<span class="badge ' + badge[0] + '">' + esc(badge[1]) + '</span>';
       html += '</div>';
       html += '<div class="task-brief">' + esc(task.brief) + '</div>';
+      html += prog;
       html += '<div class="task-meta"><span>' + esc((task.updated_at || '').replace('T', ' ').slice(0, 16)) + '</span></div>';
       html += '</div>';
     });
@@ -143,6 +151,7 @@
         syncEditState(task);
         renderTasks();
         renderStage();
+        if (taskIsOpen(task)) { startPolling(); } else { stopPolling(); }
       })
       .catch(function (err) {
         toast('读取任务失败：' + err.message, true);
@@ -739,6 +748,7 @@
     }
     var style = el('style').value.trim();
     el('btn-create').disabled = true;
+    el('btn-create').textContent = '创建中…';
     api('/api/tasks', { method: 'POST', body: { brief: brief, style: style } })
       .then(function (task) {
         closeSheet();
@@ -750,14 +760,58 @@
       })
       .then(function () {
         renderStage();
-        toast('任务已创建');
+        toast('任务已创建，正在生成…');
+        startPolling();
       })
       .catch(function (err) {
         toast('创建失败：' + err.message, true);
       })
       .then(function () {
         el('btn-create').disabled = false;
+        el('btn-create').textContent = '创建并开始';
       });
+  }
+
+  /* ---------------- 异步任务轮询 ---------------- */
+  // 任务未完成时，每 3 秒刷新一次列表与当前任务，让步骤条/进度实时推进；完成或切走后自动停。
+  var pollTimer = null;
+
+  function taskIsOpen(task) {
+    if (!task) { return false; }
+    return task.status === 'RUNNING' || task.status === 'WAITING_INPUT';
+  }
+
+  function pollTick() {
+    if (!state.task || !taskIsOpen(state.task)) {
+      stopPolling();
+      return;
+    }
+    var tid = state.task.task_id != null ? state.task.task_id : state.task.id;
+    api('/api/tasks/' + tid)
+      .then(function (fresh) {
+        state.task = fresh;
+        syncEditState(fresh);
+        return loadTasks();
+      })
+      .then(function () {
+        renderStage();
+        if (!taskIsOpen(state.task)) {
+          stopPolling();
+        }
+      })
+      .catch(function () { /* 网络抖动忽略，下个 tick 再试 */ });
+  }
+
+  function startPolling() {
+    if (pollTimer) { return; }
+    pollTimer = setInterval(pollTick, 3000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
   }
 
   /* ---------------- 启动 ---------------- */
