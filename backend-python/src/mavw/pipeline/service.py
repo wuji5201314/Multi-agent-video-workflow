@@ -28,7 +28,7 @@ from ..publish.adapters import build_adapters
 from ..render.card import render_material_card
 from ..render.models import RenderItem, RenderRequest, RenderResult
 from .steps import GATES, STEP_ORDER, STEP_TITLES, Step, StepStatus, TaskStatus
-
+from ..adapters import MptClient, MptError
 logger = logging.getLogger(__name__)
 
 # 模型出图时补上的画风约束：实拍照片、竖屏、不留文字（大字与字幕由渲染层叠加）。
@@ -117,6 +117,8 @@ class PipelineService:
         self._writer = writer or ContentWriter(settings)
         self._adapters = build_adapters(settings.output_dir())
         self._renderer = None
+        # MPT 能力引擎客户端（懒构造；仅当 MAVW_MPT_ENABLED 打开才会被调用）。
+        self._mpt: MptClient | None = MptClient(settings) if settings.mpt_enabled else None
         self._init_db()
 
     # ---------------- 基础设施 ----------------
@@ -351,6 +353,127 @@ class PipelineService:
                 self._update_step(task_id, code, status=StepStatus.PENDING, payload={}, error="")
         return await self.advance(task_id)
 
+    # ---------------- MPT 能力引擎（可选，失败自动回退） ----------------
+    def _mpt_client(self) -> MptClient | None:
+        """返回可用的 MPT 客户端；未启用或不可达时返回 None（静默回退）。"""
+
+        if not self._settings.mpt_enabled:
+            return None
+        if self._mpt is None:
+            self._mpt = MptClient(self._settings)
+        try:
+            if not self._mpt.ping():
+                logger.warning("MPT 已启用但当前不可达，本步骤回退到本地引擎。")
+                return None
+        except MptError:
+            return None
+        return self._mpt
+
+    async def _mpt_script_body(self, brief: str, topic: Topic, note: str) -> str:
+        """用 MPT 的 /scripts 生成一版口播正文；失败返回空串由调用方回退。"""
+
+        client = self._mpt_client()
+        if client is None:
+            return ""
+        subject = topic.title or brief
+        try:
+            return client.generate_script(
+                subject,
+                paragraphs=max(1, self._settings.pipeline_shot_count),
+                prompt=(note or "").strip(),
+                timeout=self._settings.mpt_probe_timeout_seconds,
+            ).strip()
+        except MptError as exc:
+            logger.warning("MPT 生成脚本失败，回退本地模板：%s", exc)
+            return ""
+
+    def _mpt_combine_script(self, base: Script, mpt_body: str) -> Script:
+        """把 MPT 的长正文按 shot_count 均分成镜头 body，标题/标签沿用本地模型。"""
+
+        if not mpt_body:
+            return base
+        # 按中文句号/问号/叹号/换行切句，均分到既有镜头数。
+        import re
+
+        raw = re.split(r"[。！？!?\n]+", mpt_body)
+        sentences = [s.strip() for s in raw if s.strip()]
+        if not sentences:
+            return base
+        shot_count = max(1, len(base.shots) or self._settings.pipeline_shot_count)
+        per = max(1, -(-len(sentences) // shot_count))  # 向上取整
+        chunks = ["，".join(sentences[i:i + per]) for i in range(0, len(sentences), per)]
+        shots: list[Shot] = []
+        for index in range(shot_count):
+            old = base.shots[index] if index < len(base.shots) else base.shots[-1]
+            body = chunks[index] if index < len(chunks) else old.body
+            shots.append(
+                Shot(
+                    headline=old.headline,
+                    body=body,
+                    duration_ms=old.duration_ms,
+                    image_query=old.image_query,
+                )
+            )
+        return base.with_shots(shots) if hasattr(base, "with_shots") else Script(
+            title=base.title,
+            cover_title=base.cover_title,
+            caption=base.caption,
+            tags=base.tags,
+            shots=shots,
+        )
+    async def _mpt_render(
+        self, task: dict[str, Any], script: dict[str, Any], material: list[dict[str, Any]]
+    ) -> tuple[str, bytes] | None:
+        """让 MPT 一条龙出片并下载成片字节；失败返回 None 由调用方回退本地渲染。"""
+
+        client = self._mpt_client()
+        if client is None:
+            return None
+        # 拼一整段口播：优先 body，其次 headline。
+        script_text = "".join(
+            (item.get("body") or item.get("headline") or "").strip()
+            for item in material
+        ).strip()
+        if not script_text:
+            script_text = script.get("caption") or task["brief"]
+        params: dict[str, Any] = {
+            "video_subject": script.get("title") or task["brief"],
+            "video_script": script_text,
+            "video_terms": "",
+            "video_aspect": "9:16",
+            "video_source": "local",
+            "video_concat_mode": "random",
+            "video_clip_duration": 5,
+            "video_count": 1,
+            "voice_name": self._settings.media_render_tts_voice,
+            "subtitle_enabled": bool(self._settings.media_render_subtitle_enabled),
+            "bgm_type": "random" if self._settings.media_render_bgm_enabled else "none",
+        }
+        try:
+            task_id = client.create_video(params)
+            mpt_task = client.wait_task(task_id, timeout=self._settings.mpt_request_timeout_seconds)
+        except MptError as exc:
+            logger.warning("MPT 出片失败，回退本地渲染：%s", exc)
+            return None
+        if mpt_task.failed:
+            logger.warning(
+                "MPT 出片任务失败 stage=%s error=%s，回退本地渲染。",
+                mpt_task.failed_stage,
+                mpt_task.error,
+            )
+            return None
+        candidates = mpt_task.combined_videos or mpt_task.videos or []
+        if not candidates:
+            logger.warning("MPT 出片完成但无产物，回退本地渲染。")
+            return None
+        remote = candidates[0]
+        try:
+            data = client.download(remote)
+        except MptError as exc:
+            logger.warning("下载 MPT 成片失败，回退本地渲染：%s", exc)
+            return None
+        return remote, data
+
     # ---------------- 各步骤实现 ----------------
     async def _run_step(self, task_id: int, step: Step) -> dict[str, Any]:
         task = self.get_task(task_id)
@@ -403,6 +526,12 @@ class PipelineService:
             self._settings.pipeline_shot_count,
             note=self._payload(task, Step.TOPIC).get("feedback", ""),
         )
+        # MPT 能力引擎：用它的多模型脚本生成一版正文，均分进镜头（失败静默回退）。
+        mpt_body = await self._mpt_script_body(
+            task["brief"], topic, self._payload(task, Step.TOPIC).get("feedback", "")
+        )
+        if mpt_body:
+            script = self._mpt_combine_script(script, mpt_body)
         previous = self._payload(task, Step.SCRIPT)
         shots = [shot.__dict__ for shot in script.shots]
         if previous.get("script", {}).get("shots"):
@@ -492,6 +621,27 @@ class PipelineService:
         material = self._payload(task, Step.MATERIAL).get("shots") or []
         if not material:
             raise RuntimeError("没有素材，无法渲染。")
+
+        # 首选 MPT 一条龙出片；任何失败都静默回退到本地渲染器。
+        mpt_result = await self._mpt_render(task, script, material)
+        if mpt_result is not None:
+            remote, data = mpt_result
+            out_dir = self._settings.output_dir() / "assets" / "materials" / f"task-{task['task_id']}"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            video_path = out_dir / "mpt-render.mp4"
+            video_path.write_bytes(data)
+            self._add_artifact(task["task_id"], Step.RENDER, "video", video_path)
+            return {
+                "video_object_key": "",
+                "video_file_size": video_path.stat().st_size,
+                "cover_object_key": "",
+                "duration_ms": None,
+                "video_path": str(video_path),
+                "cover_path": "",
+                "render_engine": "mpt",
+                "remote_source": remote,
+            }
+
         request = RenderRequest(
             preview_task_id=task["task_id"],
             format="VIDEO",
@@ -527,6 +677,7 @@ class PipelineService:
             "duration_ms": result.duration_ms,
             "video_path": video_path,
             "cover_path": cover_path,
+            "render_engine": "local",
         }
 
     async def _step_publish(self, task: dict[str, Any]) -> dict[str, Any]:

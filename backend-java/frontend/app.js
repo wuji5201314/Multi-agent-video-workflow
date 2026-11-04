@@ -1,4 +1,4 @@
-/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
+﻿/* Multi-Agent Video Workflow 前端：原生 JS，无构建依赖。
    与后端约定：
    - GET  /api/health
    - GET  /api/tasks
@@ -119,15 +119,23 @@
       return;
     }
     var html = '';
+    var currentId = state.task ? (state.task.task_id != null ? state.task.task_id : state.task.id) : null;
     state.tasks.forEach(function (task) {
+      var tid = task.task_id != null ? task.task_id : task.id;
       var badge = TASK_BADGE[task.status] || ['idle', task.status];
-      var active = state.task && state.task.task_id === task.id ? ' active' : '';
-      html += '<div class="task-item' + active + '" data-task="' + task.id + '">';
+      var active = currentId != null && currentId === tid ? ' active' : '';
+      // 生成中的任务加一个轻微的进度条，让"异步正在跑"看得见
+      var prog = '';
+      if (task.status === 'RUNNING') {
+        prog = '<div class="task-progress"><div class="task-progress-bar"></div></div>';
+      }
+      html += '<div class="task-item' + active + '" data-task="' + tid + '">';
       html += '<div class="task-item-head">';
-      html += '<span class="task-id">#' + task.id + '</span>';
+      html += '<span class="task-id">#' + tid + '</span>';
       html += '<span class="badge ' + badge[0] + '">' + esc(badge[1]) + '</span>';
       html += '</div>';
       html += '<div class="task-brief">' + esc(task.brief) + '</div>';
+      html += prog;
       html += '<div class="task-meta"><span>' + esc((task.updated_at || '').replace('T', ' ').slice(0, 16)) + '</span></div>';
       html += '</div>';
     });
@@ -143,6 +151,7 @@
         syncEditState(task);
         renderTasks();
         renderStage();
+        if (taskIsOpen(task)) { startPolling(); } else { stopPolling(); }
       })
       .catch(function (err) {
         toast('读取任务失败：' + err.message, true);
@@ -377,18 +386,42 @@
     if (!payload.video_object_key && !artifact) {
       return '<div class="subtle">成片还没生成。</div>';
     }
-    var html = '<div class="preview-wrap">';
-    if (artifact) {
-      html += '<video class="preview-video" controls preload="metadata" src="/api/tasks/' + task.task_id + '/artifacts/' + artifact.id + '"></video>';
-    } else {
-      html += '<div class="preview-video"></div>';
-    }
-    html += '<div class="kv">';
-    html += kvRow('时长', payload.duration_ms ? (payload.duration_ms / 1000).toFixed(2) + ' 秒' : '—');
-    html += kvRow('体积', payload.video_file_size ? (payload.video_file_size / 1024 / 1024).toFixed(2) + ' MB' : '—');
-    html += kvRow('成片对象', payload.video_object_key || '—');
-    html += kvRow('封面对象', payload.cover_object_key || '—');
-    html += '</div></div>';
+    var src = artifact ? ('/api/tasks/' + task.task_id + '/artifacts/' + artifact.id) : '';
+    var media = src
+      ? '<video class="fin-video" controls preload="metadata" src="' + esc(src) + '"></video>'
+      : '<div class="fin-video fin-video-empty"><div class="hr-play">▶</div><span>成片生成中…</span></div>';
+
+    var metrics = [
+      ['时长', payload.duration_ms ? (payload.duration_ms / 1000).toFixed(2) + ' 秒' : '—'],
+      ['体积', payload.video_file_size ? (payload.video_file_size / 1024 / 1024).toFixed(2) + ' MB' : '—']
+    ].map(function (row) {
+      return '<div class="fin-metric"><span class="fin-metric-k">' + esc(row[0]) + '</span>' +
+        '<span class="fin-metric-v">' + esc(row[1]) + '</span></div>';
+    }).join('');
+
+    var files = [
+      ['成片文件', payload.video_object_key || (artifact ? artifact.path : '—')],
+      ['封面文件', payload.cover_object_key || '—']
+    ].map(function (row) {
+      return '<div class="fin-file"><span class="fin-file-k">' + esc(row[0]) + '</span>' +
+        '<code class="fin-file-v" title="' + esc(row[1]) + '">' + esc(row[1]) + '</code></div>';
+    }).join('');
+
+    var actions = src
+      ? '<div class="fin-actions">' +
+          '<a class="btn btn-primary btn-sm" href="' + esc(src) + '" download="成片-' + task.task_id + '.mp4">下载成片</a>' +
+          '<a class="btn btn-secondary btn-sm" href="' + esc(src) + '" target="_blank" rel="noopener">新窗口预览</a>' +
+        '</div>'
+      : '';
+
+    var html = '<div class="fin-card">' +
+      '<div class="fin-media">' + media + '</div>' +
+      '<div class="fin-side">' +
+        '<div class="fin-metrics">' + metrics + '</div>' +
+        '<div class="fin-files">' + files + '</div>' +
+        actions +
+      '</div>' +
+    '</div>';
     return html;
   }
 
@@ -416,19 +449,57 @@
     var payload = step.payload || {};
     var plan = payload.plan || [];
     var body = payload.payload || {};
-    var html = '<div class="kv">';
-    html += kvRow('标题', body.title || '—');
-    html += kvRow('文案', body.caption || '—');
-    html += kvRow('标签', (body.tags || []).join(' · ') || '—');
-    html += kvRow('目标平台', (body.platforms || []).join(' · ') || '—');
-    html += '</div>';
-    html += '<div class="subtle" style="margin:14px 0 8px">发布计划</div>';
-    html += '<div class="code">' + esc(JSON.stringify(plan, null, 2)) + '</div>';
+    var tags = (body.tags || []).join(' ');
+    var platforms = (body.platforms || []).map(function (p) {
+      return '<span class="pub-platform">' + esc(p) + '</span>';
+    }).join('');
+    var html = '<div class="pub-card">' +
+      '<div class="pub-field"><label>标题</label><div class="pub-title">' + esc(body.title || '—') + '</div></div>' +
+      '<div class="pub-field"><label>发布文案</label><div class="pub-caption">' + esc(body.caption || '—') + '</div></div>' +
+      '<div class="pub-field"><label>标签</label><div class="pub-tags">' + ((body.tags || []).length ? (body.tags || []).map(function (t) { return '<span class="pub-tag">#' + esc(t) + '</span>'; }).join('') : '<span class="subtle">—</span>') + '</div></div>' +
+      '<div class="pub-field"><label>目标平台</label><div class="pub-platforms">' + (platforms || '<span class="subtle">—</span>') + '</div></div>' +
+      '<div class="pub-actions">' +
+        '<button class="btn btn-primary btn-sm" data-copy="' + esc((body.title || '') + '\n' + (body.caption || '') + '\n' + tags) + '">一键复制全部</button>' +
+        '<button class="btn btn-secondary btn-sm" data-copy="' + esc(body.caption || '') + '">仅复制文案</button>' +
+        '<button class="btn btn-secondary btn-sm" data-copy="' + esc(tags) + '">仅复制标签</button>' +
+      '</div>' +
+      '<details class="pub-plan"><summary>查看发布计划</summary><pre class="pub-code">' + esc(JSON.stringify(plan, null, 2)) + '</pre></details>' +
+    '</div>';
     return html;
   }
 
   function kvRow(key, value) {
     return '<div class="kv-row"><span>' + esc(key) + '</span><b>' + esc(value) + '</b></div>';
+  }
+
+  // 复制到剪贴板：优先用 Clipboard API，非安全上下文回退到临时 textarea。
+  function copyText(text, button) {
+    if (!text) { toast('没有可复制的内容', true); return; }
+    function done() {
+      toast('已复制');
+      if (button) {
+        var old = button.textContent;
+        button.textContent = '已复制';
+        setTimeout(function () { button.textContent = old; }, 1400);
+      }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text); done(); });
+    } else {
+      fallbackCopy(text);
+      done();
+    }
+  }
+
+  function fallbackCopy(text) {
+    var area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); } catch (err) { /* 忽略 */ }
+    area.remove();
   }
 
   /* ---------------- GATE 操作条 ---------------- */
@@ -488,6 +559,11 @@
       var gateBtn = event.target.closest('[data-gate]');
       if (gateBtn) {
         submitGate(task, step, gateBtn.getAttribute('data-gate'));
+      }
+
+      var copyBtn = event.target.closest('[data-copy]');
+      if (copyBtn) {
+        copyText(copyBtn.getAttribute('data-copy') || '', copyBtn);
       }
     });
 
@@ -672,6 +748,7 @@
     }
     var style = el('style').value.trim();
     el('btn-create').disabled = true;
+    el('btn-create').textContent = '创建中…';
     api('/api/tasks', { method: 'POST', body: { brief: brief, style: style } })
       .then(function (task) {
         closeSheet();
@@ -683,14 +760,58 @@
       })
       .then(function () {
         renderStage();
-        toast('任务已创建');
+        toast('任务已创建，正在生成…');
+        startPolling();
       })
       .catch(function (err) {
         toast('创建失败：' + err.message, true);
       })
       .then(function () {
         el('btn-create').disabled = false;
+        el('btn-create').textContent = '创建并开始';
       });
+  }
+
+  /* ---------------- 异步任务轮询 ---------------- */
+  // 任务未完成时，每 3 秒刷新一次列表与当前任务，让步骤条/进度实时推进；完成或切走后自动停。
+  var pollTimer = null;
+
+  function taskIsOpen(task) {
+    if (!task) { return false; }
+    return task.status === 'RUNNING' || task.status === 'WAITING_INPUT';
+  }
+
+  function pollTick() {
+    if (!state.task || !taskIsOpen(state.task)) {
+      stopPolling();
+      return;
+    }
+    var tid = state.task.task_id != null ? state.task.task_id : state.task.id;
+    api('/api/tasks/' + tid)
+      .then(function (fresh) {
+        state.task = fresh;
+        syncEditState(fresh);
+        return loadTasks();
+      })
+      .then(function () {
+        renderStage();
+        if (!taskIsOpen(state.task)) {
+          stopPolling();
+        }
+      })
+      .catch(function () { /* 网络抖动忽略，下个 tick 再试 */ });
+  }
+
+  function startPolling() {
+    if (pollTimer) { return; }
+    pollTimer = setInterval(pollTick, 3000);
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
   }
 
   /* ---------------- 启动 ---------------- */

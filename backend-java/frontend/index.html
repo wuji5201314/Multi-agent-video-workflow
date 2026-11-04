@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
 <title>Multi-Agent Video Workflow · 创作工作台</title>
-<link rel="stylesheet" href="/app.css?v=4" />
+<link rel="stylesheet" href="/app.css?v=17" />
 </head>
 <body>
 
@@ -24,6 +24,10 @@
     <span id="health-text">连接中…</span>
   </div>
   <div class="spacer"></div>
+  <button class="btn btn-secondary" id="btn-settings">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
+    设置
+  </button>
   <button class="btn btn-secondary" id="btn-new-video" hidden>新建视频任务</button>
 </header>
 
@@ -74,6 +78,20 @@
         <div class="count-badge" id="page-count">3 个功能</div>
       </div>
       <div class="notice" id="page-notice"></div>
+      <!-- 概览统计（首页为全局 4 格；分类页为分类内统计） -->
+      <div class="home-stats" id="home-stats"></div>
+      <!-- 最近作品 / 分类记录 -->
+      <div class="home-section" id="home-recent-wrap">
+        <div class="home-section-head">
+          <div class="home-section-title" id="home-recent-title">最近作品</div>
+          <div class="home-section-hint" id="home-recent-hint"></div>
+        </div>
+        <div class="home-recent" id="home-recent"></div>
+      </div>
+      <!-- 功能入口 -->
+      <div class="home-section-head home-tools-head" id="home-tools-head">
+        <div class="home-section-title" id="home-tools-title">全部功能</div>
+      </div>
       <div id="group-list"></div>
     </div>
   </section>
@@ -144,6 +162,7 @@
             <div class="field-block">
               <div class="field-label">模型</div>
               <div class="segmented" id="f-model"></div>
+              <div class="field-hint" id="model-hint">中文封面建议选 Qwen-Image；FLUX 出图快但写不好中文。</div>
             </div>
             <div class="field-block">
               <div class="field-label">随机种子</div>
@@ -189,6 +208,258 @@
     </div>
   </section>
 
+  <!-- ============ 配音工作区 ============ -->
+  <section class="view" id="view-audio">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-audio-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="audio-title">配音工坊</div>
+        <div class="panel-desc">写一段文案，选音色与语速，生成可直接下载的语音。</div>
+
+        <div class="field-block">
+          <div class="field-label">文案</div>
+          <textarea id="a-text" class="textarea" rows="6" placeholder="把要念的文案贴进来，例如：大家好，今天聊聊多智能体如何协同工作。"></textarea>
+          <div class="field-hint"><span id="a-count">0</span> / 2000 · Ctrl + Enter 直接合成</div>
+          <div class="samples" id="a-samples"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">音色</div>
+          <select id="a-voice" class="text-input"></select>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">语速 <span class="field-opt"><span id="a-rate-val">0</span>%</span></div>
+          <input type="range" id="a-rate" class="range" min="-50" max="100" step="5" value="0" />
+          <div class="field-hint">负数更慢、正数更快，0 为默认节奏</div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">音量 <span class="field-opt"><span id="a-volume-val">0</span>%</span></div>
+          <input type="range" id="a-volume" class="range" min="-50" max="50" step="5" value="0" />
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-audio-generate">合成语音</button>
+        <div class="gen-status" id="a-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="audio-eyebrow">输出</div>
+          <div class="result-title" id="a-result-title">还没有配音</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="audio-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3z"/><path d="M6 11a6 6 0 0012 0M12 17v4"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边写好文案，点合成语音</div>
+          <div class="subtle">支持多音色、语速与音量调节，产物可在线试听并下载 WAV</div>
+        </div>
+        <div class="audio-list" id="audio-list" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 字幕工作区 ============ -->
+  <section class="view" id="view-subtitle">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-subtitle-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="subtitle-title">字幕工坊</div>
+        <div class="panel-desc">贴一段口播稿，自动断句并导出 ASS / SRT / VTT 字幕。</div>
+
+        <div class="field-block">
+          <div class="field-label">文案</div>
+          <textarea id="s-text" class="textarea" rows="6" placeholder="把口播稿贴进来，例如：大家好，今天聊聊多智能体如何协同工作。我们把选题、脚本、素材、渲染、发布拆成五步。"></textarea>
+          <div class="field-hint"><span id="s-count">0</span> / 2000 字</div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">断句方式</div>
+          <div class="segmented" id="s-mode"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">每行最多字数 <span class="field-opt"><span id="s-maxchars-val">16</span> 字</span></div>
+          <input type="range" id="s-maxchars" class="range" min="6" max="32" step="2" value="16" />
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-subtitle-build">生成字幕</button>
+        <div class="gen-status" id="s-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="subtitle-eyebrow">输出</div>
+          <div class="result-title" id="s-result-title">还没有字幕</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="subtitle-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 14h4M13 14h4"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边贴好口播稿，点生成字幕</div>
+          <div class="subtle">按标点与字数比例自动断句，实时预览每条字幕并可下载三种格式</div>
+        </div>
+        <div class="subtitle-panel" id="subtitle-panel" hidden></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============ 文案工作区 ============ -->
+  <section class="view" id="view-copy">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-copy-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="copy-title">文案工坊</div>
+        <div class="panel-desc">输入产品/主题，一键生成详情页文案、口播稿、标题或仿写。</div>
+
+        <div class="field-block">
+          <div class="field-label">文案类型</div>
+          <div class="segmented" id="c-kind"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">主题 / 产品</div>
+          <textarea id="c-topic" class="textarea" rows="4" placeholder="例如：一款便携手冲壶，卖点轻、保温、单手操作，面向咖啡爱好者"></textarea>
+          <div class="field-hint"><span id="c-count">0</span> / 2000 字</div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">语气风格</div>
+          <div class="segmented" id="c-style"></div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">补充要求 <span class="field-opt">可选</span></div>
+          <textarea id="c-extra" class="textarea" rows="2" placeholder="例如：控制在 40 秒；突出性价比；面向宝妈人群"></textarea>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-copy-write">生成文案</button>
+        <div class="gen-status" id="c-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="copy-eyebrow">输出</div>
+          <div class="result-title" id="c-result-title">还没有文案</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="copy-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <path d="M8 6h9M8 12h9M8 18h5"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边填好主题，点生成文案</div>
+          <div class="subtle">调用大模型直接产出可用文案，结果会自动存进「我的文案」</div>
+        </div>
+        <div class="copy-panel" id="copy-panel" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 视频编辑工作区 ============ -->
+  <section class="view" id="view-edit">
+    <aside class="panel-col">
+      <div class="panel-scroll">
+        <button class="back-link" id="btn-edit-back">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+          返回
+        </button>
+        <div class="panel-title" id="edit-title">视频编辑</div>
+        <div class="panel-desc">上传一段素材，本地用 ffmpeg 裁剪、转竖屏、变速，不上传云端。</div>
+
+        <div class="field-block">
+          <div class="field-label">素材 <span class="field-opt">mp4 / mov / mkv，≤500MB</span></div>
+          <div class="dropzone" id="edit-dropzone">
+            <input type="file" id="e-file" accept="video/*" hidden />
+            <div class="dropzone-inner" id="edit-dropzone-inner">
+              <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#86868b;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
+              <div>点击或拖入素材</div>
+            </div>
+            <div class="dropzone-preview" id="edit-preview" hidden></div>
+          </div>
+        </div>
+
+        <div class="field-block">
+          <div class="field-label">处理方式</div>
+          <div class="segmented" id="e-action"></div>
+        </div>
+
+        <div class="field-block" id="e-trim-block" hidden>
+          <div class="field-label">裁剪区间（秒）</div>
+          <div class="inline-row">
+            <input type="number" id="e-start" class="text-input" value="0" min="0" step="0.5" placeholder="开始" />
+            <input type="number" id="e-end" class="text-input" value="0" min="0" step="0.5" placeholder="结束(0=到结尾)" />
+          </div>
+        </div>
+
+        <div class="field-block" id="e-width-block">
+          <div class="field-label">目标宽度 <span class="field-opt"><span id="e-width-val">1080</span> px</span></div>
+          <input type="range" id="e-width" class="range" min="480" max="1920" step="60" value="1080" />
+        </div>
+
+        <div class="field-block" id="e-speed-block" hidden>
+          <div class="field-label">速度 <span class="field-opt"><span id="e-speed-val">1.0</span> x</span></div>
+          <input type="range" id="e-speed" class="range" min="50" max="200" step="10" value="100" />
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn btn-primary btn-block" id="btn-edit-run">开始处理</button>
+        <div class="gen-status" id="e-status"></div>
+      </div>
+    </aside>
+
+    <div class="result-col">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow" id="edit-eyebrow">输出</div>
+          <div class="result-title" id="e-result-title">还没有处理结果</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="empty" id="edit-empty">
+          <div class="empty-mark">
+            <svg viewBox="0 0 24 24" width="22" height="22" style="fill:none;stroke:#66666f;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round">
+              <rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 9l4-2v10l-4-2"/>
+            </svg>
+          </div>
+          <div class="empty-title">左边上传素材，选处理方式</div>
+          <div class="subtle">处理在本机 ffmpeg 完成，结果可预览下载，记录会存进「我的编辑」</div>
+        </div>
+        <div class="edit-panel" id="edit-panel" hidden></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ 视频工作区 ============ -->
   <section class="view" id="view-video">
     <aside class="sidebar">
@@ -214,6 +485,14 @@
         </div>
       </div>
     </section>
+  </section>
+
+  <section class="view" id="view-detail">
+    <div class="detail-head">
+      <button class="btn btn-ghost btn-sm" id="btn-detail-back">‹ 返回</button>
+      <div class="detail-crumb" id="detail-crumb"></div>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
   </section>
 
 </div>
@@ -245,9 +524,31 @@
   </div>
 </div>
 
+<!-- 设置弹层：每个人可填自己的模型 / API Key / 服务地址 -->
+<div class="settings-mask" id="settings-mask" hidden>
+  <div class="settings-sheet">
+    <div class="settings-head">
+      <div>
+        <div class="settings-title">模型与密钥设置</div>
+        <div class="settings-sub">这里的配置只保存在本机 <code>output/settings.json</code>，每位使用者可以填自己的模型与 Key。留空表示沿用服务器默认（环境变量）。</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btn-settings-close">关闭</button>
+    </div>
+    <div class="settings-body" id="settings-body">
+      <div class="settings-loading">读取配置中…</div>
+    </div>
+    <div class="settings-foot">
+      <button class="btn btn-ghost btn-sm" id="btn-settings-reset">恢复默认</button>
+      <div class="spacer"></div>
+      <span class="settings-status" id="settings-status"></span>
+      <button class="btn btn-primary btn-sm" id="btn-settings-save">保存配置</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script src="/app.js?v=4"></script>
-<script src="/studio.js?v=4"></script>
+<script src="/app.js?v=17"></script>
+<script src="/studio.js?v=17"></script>
 </body>
 </html>

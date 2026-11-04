@@ -109,6 +109,129 @@ class FluxClient:
         raise FluxError(last_error or "出图失败")
 
 
+class _ModelRouter:
+    """按模型名把请求分派到 flux（NIM /genai）或 OpenAI 兼容（/images/generations）。
+
+    Qwen-Image 在 NIM / 各家云上走 OpenAI 的 `/v1/images/generations`，
+    返回 data[0].b64_json，和 flux 的 artifacts[0].base64 完全两套协议，
+    所以这里按模型名前缀路由，产物统一成 FluxResult。
+    路由规则：
+      - 模型名含 "qwen" / "seedream" / "dall" / "gpt-image" / "sd" / "sdxl" → OpenAI 兼容
+      - 其余（flux*、cosmos*）→ NIM /genai
+    """
+
+    _OPENAI_HINTS = ("qwen", "seedream", "dall", "gpt-image", "sdxl", "stable-diffusion", "/sd")
+
+    @classmethod
+    def is_openai_style(cls, model: str) -> bool:
+        lowered = (model or "").lower()
+        return any(hint in lowered for hint in cls._OPENAI_HINTS)
+
+
+class OpenAIImageClient:
+    """OpenAI 兼容的文生图（/v1/images/generations，返回 data[].b64_json）。
+
+    适配 Qwen-Image / Seedream / DALL·E / gpt-image 等 OpenAI 协议服务。
+    尺寸用 size="宽x高"，不支持 steps/cfg_scale（这些参数会被忽略）。
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+        self._base = settings.image_api_base.rstrip("/")
+        self._key = settings.image_api_key
+        self._model = settings.image_model
+
+    async def generate(self, request: FluxRequest) -> FluxResult:
+        if not self._key:
+            raise FluxError("没有配置 IMAGE_API_KEY，无法出图。")
+
+        # image_api_base 可能已带 /v1，也可能不带；统一拼成 openai 风格端点
+        base = self._base
+        if base.endswith("/images/generations"):
+            url = base
+        elif base.endswith("/v1"):
+            url = f"{base}/images/generations"
+        else:
+            url = f"{base}/v1/images/generations"
+
+        payload: dict[str, object] = {
+            "model": request.model,
+            "prompt": request.prompt,
+            "n": 1,
+            "size": f"{request.width}x{request.height}",
+            "response_format": "b64_json",
+        }
+        if request.negative_prompt:
+            # OpenAI 协议没有 negative 字段，降级拼进提示词
+            payload["prompt"] = f"{request.prompt}\n\n避免出现：{request.negative_prompt}"
+        if request.seed:
+            payload["seed"] = request.seed
+
+        headers = {
+            "Authorization": f"Bearer {self._key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        attempts = max(1, self._settings.image_retries)
+        last_error = ""
+        started = asyncio.get_event_loop().time()
+        for attempt in range(1, attempts + 1):
+            try:
+                async with httpx.AsyncClient(
+                    timeout=self._settings.image_timeout_seconds
+                ) as client:
+                    response = await client.post(url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    data = json.loads(response.text)
+                    b64 = _extract_openai_b64(data)
+                    if not b64:
+                        raise RuntimeError(f"返回体里没有图片：{str(data)[:160]}")
+                    raw = base64.b64decode(b64)
+                    image = Image.open(io.BytesIO(raw)).convert("RGB")
+                    elapsed = int((asyncio.get_event_loop().time() - started) * 1000)
+                    seed = int(data.get("seed") or data.get("created") or request.seed or 0)
+                    return FluxResult(image=image, seed=seed, elapsed_ms=elapsed)
+                last_error = f"HTTP {response.status_code} {response.text[:180]}"
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("出图(openai)第 %s/%s 次失败：%s", attempt, attempts, last_error)
+            await asyncio.sleep(min(2 * attempt, 6))
+        raise FluxError(last_error or "出图失败")
+
+
+def _extract_openai_b64(data: dict) -> str:
+    """从 OpenAI 返回体里取 base64：兼容 data[].b64_json / images[].b64_json / 顶层。"""
+
+    for key in ("data", "images", "artifacts"):
+        items = data.get(key)
+        if isinstance(items, list) and items:
+            first = items[0]
+            if isinstance(first, dict):
+                for bkey in ("b64_json", "base64", "image"):
+                    val = first.get(bkey)
+                    if val:
+                        return val
+            elif isinstance(first, str):
+                return first
+    for bkey in ("b64_json", "base64", "image"):
+        if data.get(bkey):
+            return data[bkey]
+    return ""
+
+
+class ImageClient:
+    """统一入口：按模型名自动选择 flux / openai 两种协议，对 service 暴露同一个 generate()。"""
+
+    def __init__(self, settings: Settings) -> None:
+        self._flux = FluxClient(settings)
+        self._openai = OpenAIImageClient(settings)
+
+    async def generate(self, request: FluxRequest) -> FluxResult:
+        if _ModelRouter.is_openai_style(request.model):
+            return await self._openai.generate(request)
+        return await self._flux.generate(request)
+
+
 class VisionDescriber:
     """用视觉模型把图片读成一段可以喂给文生图的 prompt。"""
 

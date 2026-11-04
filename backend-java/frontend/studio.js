@@ -72,14 +72,14 @@
       tags: ['即将上线']
     },
     'cover': {
-      name: '平台封面', sub: '新手入口', icon: 'cover', ready: false, tone: 'orange',
-      desc: '一张参考图加一个主题，生成小红书、抖音或快手封面。',
-      tags: ['即将上线', '默认 9:16']
+      name: '平台封面', sub: '与图片生成同台', icon: 'cover', ready: true, mode: 'generate', tone: 'orange',
+      desc: '和图片生成同一套参数页：给主题、选 9:16、出多版挑一张。',
+      tags: ['已接通', '默认 9:16']
     },
     'edit-clip': {
-      name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false, tone: 'blue',
-      desc: '导入长素材，按脚本自动切段、配字幕、卡点成片。',
-      tags: ['即将上线']
+      name: '视频编辑', sub: '裁剪 转竖屏 变速', icon: 'edit', ready: true, mode: 'edit', tone: 'blue',
+      desc: '上传素材，本地裁剪时长、转竖屏、变速、导出音频。',
+      tags: ['已接通', '本地 ffmpeg']
     },
     'edit-upscale': {
       name: '视频高清放大', sub: '2–4 倍', icon: 'upscale', ready: false, tone: 'purple',
@@ -87,9 +87,9 @@
       tags: ['即将上线']
     },
     'voice-tts': {
-      name: '配音工坊', sub: '多音色', icon: 'voice', ready: false, tone: 'orange',
-      desc: '文案转语音，可选音色、语速与停顿。',
-      tags: ['即将上线', 'edge-tts']
+      name: '配音工坊', sub: '多音色', icon: 'voice', ready: true, mode: 'audio', tone: 'orange',
+      desc: '文案转语音，可选音色、语速与音量，产物可试听下载。',
+      tags: ['已接通', 'edge-tts']
     },
     'voice-clone': {
       name: '声音克隆', sub: '样音 10 秒', icon: 'clone', ready: false, tone: 'orange',
@@ -97,14 +97,14 @@
       tags: ['即将上线']
     },
     'subtitle': {
-      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: false, tone: 'green',
-      desc: '识别语音、自动断句、烧录成片。',
-      tags: ['即将上线', 'ASS']
+      name: '字幕工坊', sub: '自动断句', icon: 'subtitle', ready: true, mode: 'subtitle', tone: 'green',
+      desc: '贴口播稿，自动断句，导出 ASS / SRT / VTT 字幕。',
+      tags: ['已接通', 'ASS · SRT · VTT']
     },
     'copy-detail': {
-      name: '详情页文案', sub: '成交型', icon: 'copy', ready: false, tone: 'purple',
-      desc: '按产品卖点写详情页文案与分镜脚本。',
-      tags: ['即将上线']
+      name: '文案工坊', sub: '详情·口播·标题·仿写', icon: 'copy', ready: true, mode: 'copy', tone: 'purple',
+      desc: '输入产品/主题，生成详情页文案、口播稿、标题或仿写。',
+      tags: ['已接通', '大模型']
     },
     'copy-rewrite': {
       name: '文案仿写', sub: '去重改写', icon: 'copy', ready: false, tone: 'purple',
@@ -120,8 +120,8 @@
       desc: '已经接通的功能排在前面，其余功能陆续开放。',
       notice: '生成结果都会进「历史记录」，图片可直接下载。',
       groups: [
-        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'video-pipeline'] },
-        { name: '即将上线', accent: '#c7c7cc', tools: ['cover', 'voice-tts', 'subtitle', 'copy-detail'] }
+        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'cover', 'video-pipeline', 'voice-tts', 'subtitle'] },
+        { name: '即将上线', accent: '#c7c7cc', tools: ['copy-detail'] }
       ]
     },
     image: {
@@ -130,8 +130,7 @@
       desc: '从文字或参考图出发，生成可直接使用的图片与封面。',
       notice: '图片按张计费，一次最多 4 张；上传参考图即切换为重绘，固定种子可复现同一张。',
       groups: [
-        { name: '生成', accent: '#0a84ff', tools: ['image-generate'] },
-        { name: '封面与投放', accent: '#ff9f0a', tools: ['cover'] }
+        { name: '图片与封面', accent: '#0a84ff', tools: ['image-generate', 'cover'] }
       ]
     },
     video: {
@@ -150,7 +149,7 @@
       desc: '对已有素材做剪辑、放大与替换，不重新生成画面。',
       notice: '上传前请确认素材格式为 mp4 / mov，单个文件建议不超过 500MB。',
       groups: [
-        { name: '剪辑', accent: '#5ac8fa', tools: ['edit-clip'] },
+        { name: '剪辑与转换', accent: '#5ac8fa', tools: ['edit-clip'] },
         { name: '画质', accent: '#bf5af2', tools: ['edit-upscale'] }
       ]
     },
@@ -175,9 +174,20 @@
     }
   };
 
+  // 左侧导航点击后直达的主工作区：不再先停在"功能卡片墙"分类页。
+  // 分类页（含最近作品/概览）仍可从这里的面包屑/返回进入，或点首页卡片墙。
+  var CAT_PRIMARY_TOOL = {
+    image: 'image-generate',
+    video: 'video-pipeline',
+    audio: 'voice-tts',
+    edit: 'edit-clip',
+    text: 'copy-detail'
+  };
+
   /* ---------------- 状态 ---------------- */
 
   var options = { ratios: [], styles: [], qualities: [], models: [] };
+  var hasImageKey = true;
   var state = {
     cat: 'home',
     tool: 'image-generate',
@@ -188,9 +198,27 @@
     model: 'klein',
     reference: '',
     tab: 'results',
-    busy: false
+    busy: false,
+    // 配音工作台
+    audioVoices: [],
+    audioBusy: false,
+    audioItems: [],
+    // 字幕工作台
+    subMode: 'sentence',
+    subMaxChars: 16,
+    subBusy: false,
+    subResult: null,
+    // 文案工作台
+    copyKind: 'detail',
+    copyStyle: 'none',
+    copyBusy: false,
+    // 视频编辑工作台
+    editAction: 'vertical',
+    editSource: '',
+    editBusy: false
   };
   var lastItems = [];
+  var historyRows = [];
   var toastTimer = null;
 
   function el(id) { return document.getElementById(id); }
@@ -291,19 +319,1121 @@
     for (var i = 0; i < items.length; i += 1) {
       items[i].classList.toggle('active', items[i].getAttribute('data-cat') === catKey);
     }
+
+    // 概览统计 + 最近作品/分类记录 + 功能入口标题，按分类渲染
+    renderCategoryPanels(catKey);
+  }
+
+  /* ---------------- 分类页：概览 + 作品/记录 + 功能入口 ---------------- */
+  // 每个分类的展示配置：stats 拉哪些数据、recent 展示什么、tools 标题
+  var CAT_PANELS = {
+    home: {
+      toolsTitle: '全部功能',
+      stat: function () {
+        return Promise.all([
+          api('/api/images/history?limit=200').catch(function () { return []; }),
+          api('/api/tasks?limit=200').catch(function () { return []; }),
+          api('/api/audio/history?limit=200').catch(function () { return []; }),
+          api('/api/subtitle/history?limit=200').catch(function () { return []; })
+        ]).then(function (res) {
+          return [
+            { num: (res[0] || []).length, label: '图片作品', accent: true, jump: 'image' },
+            { num: (res[1] || []).length, label: '视频任务', accent: true, jump: 'video' },
+            { num: (res[2] || []).length, label: '配音片段', accent: false, jump: 'audio' },
+            { num: (res[3] || []).length, label: '字幕稿', accent: false, jump: 'subtitle' }
+          ];
+        });
+      },
+      recentTitle: '最近作品',
+      recent: loadHomeRecent
+    },
+    image: {
+      toolsTitle: '图片功能',
+      stat: function () {
+        return api('/api/images/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var ratios = {};
+          var seeds = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            var w = list[i].width || 0, h = list[i].height || 0;
+            ratios[w + '×' + h] = (ratios[w + '×' + h] || 0) + 1;
+          }
+          return [
+            { num: list.length, label: '图片总数', accent: true },
+            { num: Object.keys(ratios).length, label: '尺寸种类', accent: false },
+            { num: list.length ? (list[0].model || '—') : '—', label: '最近模型', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的图片',
+      recent: function () { return loadImageRecent(); }
+    },
+    video: {
+      toolsTitle: '视频功能',
+      stat: function () {
+        return api('/api/tasks?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var done = 0, running = 0, waiting = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            var s = list[i].status;
+            if (s === 'DONE') { done += 1; }
+            else if (s === 'RUNNING') { running += 1; }
+            else if (s === 'WAITING_INPUT') { waiting += 1; }
+          }
+          return [
+            { num: list.length, label: '任务总数', accent: true },
+            { num: done, label: '已完成', accent: false },
+            { num: running + waiting, label: '进行中/待确认', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的视频任务',
+      recent: function () { return loadTaskRecent(); }
+    },
+    audio: {
+      toolsTitle: '声音功能',
+      stat: function () {
+        return api('/api/audio/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var totalMs = 0, voices = {};
+          for (var i = 0; i < list.length; i += 1) {
+            totalMs += (list[i].duration_ms || 0);
+            if (list[i].voice) { voices[list[i].voice] = 1; }
+          }
+          return [
+            { num: list.length, label: '配音片段', accent: true },
+            { num: Math.round(totalMs / 1000) + 's', label: '累计时长', accent: false },
+            { num: Object.keys(voices).length, label: '用过音色', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的配音',
+      recent: function () { return loadAudioRecent(); }
+    },
+    subtitle: {
+      toolsTitle: '字幕功能',
+      stat: function () {
+        return api('/api/subtitle/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var cues = 0;
+          for (var i = 0; i < list.length; i += 1) { cues += (list[i].cue_count || 0); }
+          return [
+            { num: list.length, label: '字幕稿', accent: true },
+            { num: cues, label: '字幕条数', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的字幕稿',
+      recent: function () { return loadSubtitleRecent(); }
+    },
+    edit: {
+      toolsTitle: '编辑功能',
+      stat: function () {
+        return api('/api/edit/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var acts = {};
+          for (var i = 0; i < list.length; i += 1) { acts[list[i].action] = 1; }
+          return [
+            { num: list.length, label: '编辑记录', accent: true },
+            { num: Object.keys(acts).length, label: '用过处理', accent: false },
+            { num: list.length, label: '产物文件', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的编辑',
+      recent: function () { return loadEditRecent(); }
+    },
+    text: {
+      toolsTitle: '文案功能',
+      stat: function () {
+        return api('/api/copy/history?limit=200').catch(function () { return []; }).then(function (rows) {
+          var list = rows || [];
+          var kinds = {};
+          var chars = 0;
+          for (var i = 0; i < list.length; i += 1) {
+            kinds[list[i].kind] = 1;
+            chars += (list[i].text || '').length;
+          }
+          return [
+            { num: list.length, label: '文案稿', accent: true },
+            { num: Object.keys(kinds).length, label: '文案类型', accent: false },
+            { num: chars, label: '累计字数', accent: false }
+          ];
+        });
+      },
+      recentTitle: '我的文案',
+      recent: function () { return loadCopyRecent(); }
+    }
+  };
+
+  function renderCategoryPanels(catKey) {
+    var cfg = CAT_PANELS[catKey] || CAT_PANELS.home;
+    var stats = el('home-stats');
+    var recentWrap = el('home-recent-wrap');
+    var toolsHead = el('home-tools-head');
+    var toolsTitle = el('home-tools-title');
+
+    if (toolsTitle) { toolsTitle.textContent = cfg.toolsTitle || '全部功能'; }
+    if (toolsHead) { toolsHead.style.display = ''; }
+
+    // 统计条
+    if (cfg.stat) {
+      if (stats) { stats.style.display = ''; stats.innerHTML = ''; }
+      cfg.stat().then(function (cells) {
+        if (!stats) { return; }
+        stats.innerHTML = cells.map(function (c) { return statCell(c.num, c.label, c.accent, c.jump); }).join('');
+      }).catch(function () { if (stats) { stats.style.display = 'none'; } });
+    } else if (stats) {
+      stats.style.display = 'none';
+      stats.innerHTML = '';
+    }
+
+    // 最近记录
+    if (cfg.recent) {
+      if (recentWrap) { recentWrap.style.display = ''; }
+      var titleEl = el('home-recent-title');
+      if (titleEl) { titleEl.textContent = cfg.recentTitle || '最近作品'; }
+      cfg.recent();
+    } else {
+      if (recentWrap) { recentWrap.style.display = 'none'; }
+    }
+  }
+
+  /* ---------------- 首页：概览 + 最近作品 ---------------- */
+  function statCell(num, label, accent, jump) {
+    var cls = 'home-stat' + (jump ? ' clickable' : '');
+    var attr = jump ? ' data-cat-jump="' + esc(jump) + '"' : '';
+    var numCls = accent ? ' hs-accent' : '';
+    return '<div class="' + cls + '"' + attr + '>' +
+      '<div class="hs-num' + numCls + '">' + esc(String(num)) + '</div>' +
+      '<div class="hs-label">' + esc(label) + '</div>' +
+      '</div>';
+  }
+
+  function timeAgo(str) {
+    if (!str) { return ''; }
+    var t = new Date(String(str).replace(/-/g, '/')).getTime();
+    if (isNaN(t)) { return ''; }
+    var diff = Math.max(0, Date.now() - t) / 1000;
+    if (diff < 60) { return '刚刚'; }
+    if (diff < 3600) { return Math.floor(diff / 60) + ' 分钟前'; }
+    if (diff < 86400) { return Math.floor(diff / 3600) + ' 小时前'; }
+    return Math.floor(diff / 86400) + ' 天前';
+  }
+
+  var STATUS_TEXT = { WAITING_INPUT: '待你确认', RUNNING: '进行中', DONE: '已完成', FAILED: '失败' };
+
+  function loadHomeRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    Promise.all([
+      api('/api/images/history?limit=8').catch(function () { return []; }),
+      api('/api/tasks?limit=8').catch(function () { return []; })
+    ]).then(function (res) {
+      var items = [];
+      (res[0] || []).forEach(function (row) {
+        items.push({ kind: 'image', ts: row.created_at, row: row });
+      });
+      (res[1] || []).forEach(function (row) {
+        items.push({ kind: 'task', ts: row.updated_at || row.created_at, row: row });
+      });
+      items.sort(function (a, b) {
+        var ta = new Date(String(a.ts || '').replace(/-/g, '/')).getTime() || 0;
+        var tb = new Date(String(b.ts || '').replace(/-/g, '/')).getTime() || 0;
+        return tb - ta;
+      });
+      items = items.slice(0, 8);
+      if (!items.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有作品。点下面任意功能做一个，成品会出现在这里。</div>';
+        if (hint) { hint.textContent = ''; }
+        return;
+      }
+      if (hint) {
+        hint.innerHTML = '共 ' + items.length + ' 件 · <a href="javascript:void 0" data-cat-jump="image">看全部图片</a>';
+      }
+      wrap.innerHTML = items.map(function (item) {
+        if (item.kind === 'image') {
+          var r = item.row;
+          return '<button class="hr-card" data-open-image="' + esc(r.id) + '">' +
+            '<div class="hr-thumb"><img loading="lazy" src="' + esc(r.url) + '" alt="">' +
+            '<span class="hr-badge">图片</span></div>' +
+            '<div class="hr-body"><div class="hr-title">' + esc((r.prompt || '文生图作品').slice(0, 40)) + '</div>' +
+            '<div class="hr-meta">' + esc(r.width + '×' + r.height) + ' · ' + esc(timeAgo(r.created_at)) + '</div></div>' +
+            '</button>';
+        }
+        var t = item.row;
+        var label = STATUS_TEXT[t.status] || t.status || '';
+        var badgeCls = ' hr-badge-' + String(t.status || '').toLowerCase();
+        return '<button class="hr-card" data-open-task="' + esc(String(t.id)) + '">' +
+          '<div class="hr-thumb hr-thumb-video"><div class="hr-play">▶</div>' +
+          '<span class="hr-badge' + badgeCls + '">' + esc(label) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((t.brief || '视频任务').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">任务 #' + esc(String(t.id)) + ' · ' + esc(timeAgo(t.updated_at || t.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function loadImageRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/images/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      historyRows = list.concat(historyRows).filter(function (r, idx, arr) {
+        return arr.findIndex(function (x) { return x.id === r.id; }) === idx;
+      });
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 张'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有图片。点下面「图片生成」做一张，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (r) {
+        return '<button class="hr-card" data-open-image="' + esc(r.id) + '">' +
+          '<div class="hr-thumb"><img loading="lazy" src="' + esc(r.url) + '" alt="">' +
+          '<span class="hr-badge">' + esc(r.width + '×' + r.height) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((r.prompt || '文生图作品').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">' + esc(r.style || 'none') + ' · ' + esc(timeAgo(r.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function loadTaskRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/tasks?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 个任务'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有视频任务。点下面「智能成片」或「新建任务」开始一个。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (t) {
+        var label = STATUS_TEXT[t.status] || t.status || '';
+        var badgeCls = ' hr-badge-' + String(t.status || '').toLowerCase();
+        return '<button class="hr-card" data-open-task="' + esc(String(t.id)) + '">' +
+          '<div class="hr-thumb hr-thumb-video"><div class="hr-play">▶</div>' +
+          '<span class="hr-badge' + badgeCls + '">' + esc(label) + '</span></div>' +
+          '<div class="hr-body"><div class="hr-title">' + esc((t.brief || '视频任务').slice(0, 40)) + '</div>' +
+          '<div class="hr-meta">任务 #' + esc(String(t.id)) + ' · ' + esc(timeAgo(t.updated_at || t.created_at)) + '</div></div>' +
+          '</button>';
+      }).join('');
+    });
+  }
+
+  function loadAudioRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/audio/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 段'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有配音。点下面「配音工坊」合成一段，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (a, idx) {
+        var sec = a.duration_ms ? Math.round(a.duration_ms / 1000) + 's' : '—';
+        return '<button class="au-card au-card-click" data-open-audio="' + esc(a.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((a.text || '配音片段').slice(0, 28)) + '</span>' +
+          '<span class="au-card-badge">' + esc(sec) + '</span></div>' +
+          '<div class="au-card-play"><span class="au-play-tri">&#9654;</span><span>点击试听</span></div>' +
+          '<div class="au-card-meta"><span>' + esc(a.voice || '') + '</span> · ' + esc(timeAgo(a.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      // 记录行对象，供点击进入详情
+      audioRecentRows = list;
+    });
+  }
+  var audioRecentRows = [];
+
+  function loadSubtitleRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/subtitle/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 份'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有字幕稿。点下面「字幕工坊」生成一份，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (s) {
+        return '<button class="au-card au-card-click" data-open-subtitle="' + esc(s.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((s.text || '字幕稿').slice(0, 28)) + '</span>' +
+          '<span class="au-card-badge">' + esc((s.cue_count || 0) + ' 条') + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc(s.mode || '') + ' · 每行≤' + esc(String(s.max_chars || '')) + '字</span> · ' + esc(timeAgo(s.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      subtitleRecentRows = list;
+    });
+  }
+  var subtitleRecentRows = [];
+
+  /* ---------------- 文案 / 编辑 最近记录 ---------------- */
+  function loadCopyRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/copy/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 份'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有文案。点下面「文案工坊」生成一份，成品会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (c) {
+        var kindLabel = (COPY_KIND_LABELS[c.kind] || c.kind || '文案');
+        return '<button class="au-card au-card-click" data-open-copy="' + esc(c.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc((c.topic || '文案').slice(0, 24)) + '</span>' +
+          '<span class="au-card-badge">' + esc(kindLabel) + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc((c.text || '').length + ' 字') + '</span> · ' + esc(timeAgo(c.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      copyRecentRows = list;
+    });
+  }
+  var copyRecentRows = [];
+  var COPY_KIND_LABELS = { detail: '详情页', oral: '口播稿', rewrite: '仿写', title: '标题' };
+
+  function loadEditRecent() {
+    var wrap = el('home-recent');
+    var hint = el('home-recent-hint');
+    if (!wrap) { return; }
+    wrap.innerHTML = '<div class="home-empty">加载中…</div>';
+    api('/api/edit/history?limit=12').catch(function () { return []; }).then(function (rows) {
+      var list = rows || [];
+      if (hint) { hint.innerHTML = '共 ' + list.length + ' 段'; }
+      if (!list.length) {
+        wrap.innerHTML = '<div class="home-empty">还没有编辑记录。点下面「视频编辑」上传素材处理，结果会出现在这里。</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(function (e) {
+        var label = (EDIT_ACTION_LABELS[e.action] || e.action || '处理');
+        var dur = ((e.duration_ms || 0) / 1000).toFixed(1) + 's';
+        return '<button class="au-card au-card-click" data-open-edit="' + esc(e.id) + '">' +
+          '<div class="au-card-head"><span class="au-card-title">' + esc(label) + '</span>' +
+          '<span class="au-card-badge">' + esc(dur) + '</span></div>' +
+          '<div class="au-card-meta"><span>' + esc((e.size || 0) ? Math.round((e.size || 0) / 1024) + ' KB' : '') + '</span> · ' + esc(timeAgo(e.created_at)) + '</div>' +
+          '</button>';
+      }).join('');
+      editRecentRows = list;
+    });
+  }
+  var editRecentRows = [];
+  var EDIT_ACTION_LABELS = { trim: '裁剪时长', vertical: '转竖屏', scale: '缩放', mute: '去声音', extract: '导出音频', speed: '变速' };
+
+  /* ---------------- 文案工作区 ---------------- */
+  var COPY_KINDS = [
+    { key: 'detail', label: '详情页' },
+    { key: 'oral', label: '口播稿' },
+    { key: 'title', label: '标题' },
+    { key: 'rewrite', label: '仿写' }
+  ];
+  var COPY_STYLES = [
+    { key: 'none', label: '默认' },
+    { key: 'hard_sell', label: '强营销' },
+    { key: 'soft', label: '种草' },
+    { key: 'professional', label: '专业' },
+    { key: 'fun', label: '轻松' }
+  ];
+
+  function openCopyWorkspace() {
+    el('copy-title').textContent = TOOLS['copy-detail'].name;
+    el('copy-eyebrow').textContent = '文案输出';
+    renderCopyKinds();
+    renderCopyStyles();
+    updateCopyCount();
+    switchView('copy');
+  }
+
+  function renderCopyKinds() {
+    var box = el('c-kind');
+    if (!box) { return; }
+    box.innerHTML = COPY_KINDS.map(function (k) {
+      var active = k.key === state.copyKind ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-copy-kind="' + esc(k.key) + '">' + esc(k.label) + '</button>';
+    }).join('');
+  }
+
+  function renderCopyStyles() {
+    var box = el('c-style');
+    if (!box) { return; }
+    box.innerHTML = COPY_STYLES.map(function (k) {
+      var active = k.key === state.copyStyle ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-copy-style="' + esc(k.key) + '">' + esc(k.label) + '</button>';
+    }).join('');
+  }
+
+  function updateCopyCount() {
+    var c = el('c-count');
+    if (c) { c.textContent = String((el('c-topic').value || '').length); }
+  }
+
+  function renderCopyResult(item) {
+    var panel = el('copy-panel');
+    var empty = el('copy-empty');
+    if (empty) { empty.hidden = true; }
+    if (panel) { panel.hidden = false; }
+    el('c-result-title').textContent = (COPY_KIND_LABELS[item.kind] || '文案') + ' · ' + item.topic.slice(0, 16);
+    var esc_text = esc(item.text || '').replace(/\n/g, '<br>');
+    panel.innerHTML =
+      '<div class="copy-meta">' +
+        '<span class="copy-badge">' + esc(COPY_KIND_LABELS[item.kind] || item.kind) + '</span>' +
+        '<span class="subtle">' + esc(item.model || '') + ' · ' + esc((item.elapsed_ms || 0) / 1000 + 's') + '</span>' +
+      '</div>' +
+      '<div class="copy-body" id="copy-body-text">' + esc_text + '</div>' +
+      '<div class="detail-actions">' +
+        '<button class="btn btn-secondary sm" data-copy-text>复制全文</button>' +
+      '</div>';
+  }
+
+  function generateCopy() {
+    var topic = (el('c-topic').value || '').trim();
+    if (!topic) { toast('请先填写主题/产品'); el('c-topic').focus(); return; }
+    if (state.copyBusy) { return; }
+    state.copyBusy = true;
+    var btn = el('btn-copy-write');
+    btn.disabled = true;
+    el('c-status').textContent = '生成中…（大模型约需 10-60 秒）';
+    api('/api/copy/write', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic: topic,
+        kind: state.copyKind,
+        style: state.copyStyle,
+        extra: (el('c-extra').value || '').trim()
+      })
+    }).then(function (res) {
+      var item = res.item || res;
+      renderCopyResult(item);
+      el('c-status').textContent = '已生成';
+      toast('文案已生成');
+    }).catch(function (err) {
+      el('c-status').textContent = '生成失败';
+      toast('生成失败：' + (err.message || '网络错误'), true);
+    }).finally(function () {
+      state.copyBusy = false;
+      btn.disabled = false;
+    });
+  }
+
+  function bindCopyWorkspace() {
+    var back = el('btn-copy-back');
+    if (back) { back.addEventListener('click', function () { renderCategory('text'); switchView('home'); }); }
+    var kinds = el('c-kind');
+    if (kinds) { kinds.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-copy-kind]'); if (!b) { return; }
+      state.copyKind = b.getAttribute('data-copy-kind'); renderCopyKinds();
+    }); }
+    var styles = el('c-style');
+    if (styles) { styles.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-copy-style]'); if (!b) { return; }
+      state.copyStyle = b.getAttribute('data-copy-style'); renderCopyStyles();
+    }); }
+    var topic = el('c-topic');
+    if (topic) { topic.addEventListener('input', updateCopyCount); }
+    var btn = el('btn-copy-write');
+    if (btn) { btn.addEventListener('click', generateCopy); }
+    var panel = el('copy-panel');
+    if (panel) { panel.addEventListener('click', function (e) {
+      if (e.target.closest('[data-copy-text]')) {
+        var body = el('copy-body-text');
+        copyText(body ? body.innerText : '');
+      }
+    }); }
+  }
+
+  /* ---------------- 视频编辑工作区 ---------------- */
+  var EDIT_ACTIONS = [
+    { key: 'trim', label: '裁剪时长' },
+    { key: 'vertical', label: '转竖屏' },
+    { key: 'scale', label: '缩放' },
+    { key: 'mute', label: '去声音' },
+    { key: 'extract', label: '导出音频' },
+    { key: 'speed', label: '变速' }
+  ];
+
+  function openEditWorkspace() {
+    if (el('edit-title')) { el('edit-title').textContent = TOOLS['edit-clip'].name; }
+    renderEditActions();
+    applyEditActionUi();
+    switchView('edit');
+  }
+
+  function renderEditActions() {
+    var box = el('e-action');
+    if (!box) { return; }
+    box.innerHTML = EDIT_ACTIONS.map(function (a) {
+      var active = a.key === state.editAction ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-edit-action="' + esc(a.key) + '">' + esc(a.label) + '</button>';
+    }).join('');
+  }
+
+  function applyEditActionUi() {
+    var a = state.editAction;
+    if (el('e-trim-block')) { el('e-trim-block').hidden = a !== 'trim'; }
+    if (el('e-width-block')) { el('e-width-block').hidden = (a !== 'vertical' && a !== 'scale'); }
+    if (el('e-speed-block')) { el('e-speed-block').hidden = a !== 'speed'; }
+    if (el('btn-edit-run')) { el('btn-edit-run').textContent = (a === 'extract' ? '导出音频' : '开始处理'); }
+  }
+
+  function uploadEditFile(file) {
+    if (!file) { return; }
+    if (file.size > 500 * 1024 * 1024) { toast('素材超过 500MB', true); return; }
+    el('e-status').textContent = '上传中…';
+    api('/api/edit/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'video/mp4', 'x-filename': file.name },
+      body: file
+    }).then(function (res) {
+      state.editSource = res.source;
+      el('e-status').textContent = '已上传：' + file.name + '（' + Math.round(file.size / 1024) + ' KB）';
+      var prev = el('edit-preview');
+      var inner = el('edit-dropzone-inner');
+      if (prev) {
+        prev.hidden = false;
+        prev.innerHTML = '<video controls style="width:100%;border-radius:10px" src="/api/edit/uploads/' + esc(res.source) + '"></video>';
+      }
+      if (inner) { inner.hidden = true; }
+      toast('素材已上传');
+    }).catch(function (err) {
+      el('e-status').textContent = '上传失败';
+      toast('上传失败：' + (err.message || ''), true);
+    });
+  }
+
+  function runEdit() {
+    if (!state.editSource) { toast('请先上传素材'); return; }
+    if (state.editBusy) { return; }
+    state.editBusy = true;
+    var btn = el('btn-edit-run');
+    btn.disabled = true;
+    el('e-status').textContent = '处理中…';
+    var speed = (parseInt(el('e-speed').value, 10) || 100) / 100;
+    var payload = {
+      source: state.editSource,
+      action: state.editAction,
+      params: {
+        start: parseFloat(el('e-start').value) || 0,
+        end: parseFloat(el('e-end').value) || 0,
+        width: parseInt(el('e-width').value, 10) || 1080,
+        speed: speed
+      }
+    };
+    api('/api/edit/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      var item = res.item || res;
+      renderEditResult(item);
+      el('e-status').textContent = '处理完成';
+      toast('处理完成');
+    }).catch(function (err) {
+      el('e-status').textContent = '处理失败';
+      toast('处理失败：' + (err.message || ''), true);
+    }).finally(function () {
+      state.editBusy = false;
+      btn.disabled = false;
+    });
+  }
+
+  function renderEditResult(item) {
+    var panel = el('edit-panel');
+    var empty = el('edit-empty');
+    if (empty) { empty.hidden = true; }
+    if (panel) { panel.hidden = false; }
+    var label = EDIT_ACTION_LABELS[item.action] || item.action;
+    el('e-result-title').textContent = label + ' · ' + ((item.duration_ms || 0) / 1000).toFixed(1) + 's';
+    var media;
+    if (item.action === 'extract') {
+      media = '<audio controls style="width:100%" src="' + esc(item.url) + '"></audio>';
+    } else {
+      media = '<video controls style="width:100%;border-radius:12px;background:#000" src="' + esc(item.url) + '"></video>';
+    }
+    panel.innerHTML =
+      media +
+      '<div class="kv-row" style="margin-top:12px"><span class="kv-label">处理方式</span><span class="kv-value">' + esc(label) + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">时长</span><span class="kv-value">' + esc(((item.duration_ms || 0) / 1000).toFixed(1) + 's') + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">大小</span><span class="kv-value">' + esc(Math.round((item.size || 0) / 1024) + ' KB') + '</span></div>' +
+      '<div class="kv-row"><span class="kv-label">耗时</span><span class="kv-value">' + esc((item.elapsed_ms || 0) + ' ms') + '</span></div>' +
+      '<div class="detail-actions"><a class="btn btn-secondary sm" href="' + esc(item.url) + '" download>下载结果</a></div>';
+  }
+
+  function bindEditWorkspace() {
+    var back = el('btn-edit-back');
+    if (back) { back.addEventListener('click', function () { renderCategory('edit'); switchView('home'); }); }
+    var dz = el('edit-dropzone');
+    var fileInput = el('e-file');
+    if (dz && fileInput) {
+      dz.addEventListener('click', function (e) { if (e.target !== fileInput) { fileInput.click(); } });
+      fileInput.addEventListener('change', function () { uploadEditFile(fileInput.files[0]); });
+      dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('dragging'); });
+      dz.addEventListener('dragleave', function () { dz.classList.remove('dragging'); });
+      dz.addEventListener('drop', function (e) {
+        e.preventDefault(); dz.classList.remove('dragging');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) { uploadEditFile(e.dataTransfer.files[0]); }
+      });
+    }
+    var acts = el('e-action');
+    if (acts) { acts.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-edit-action]'); if (!b) { return; }
+      state.editAction = b.getAttribute('data-edit-action');
+      renderEditActions(); applyEditActionUi();
+    }); }
+    var width = el('e-width');
+    if (width) { width.addEventListener('input', function () { el('e-width-val').textContent = width.value; }); }
+    var speed = el('e-speed');
+    if (speed) { speed.addEventListener('input', function () { el('e-speed-val').textContent = ((parseInt(speed.value, 10) || 100) / 100).toFixed(1); }); }
+    var btn = el('btn-edit-run');
+    if (btn) { btn.addEventListener('click', runEdit); }
+  }
+
+
+
+  /* ---------------- 作品详情页 ---------------- */
+
+  // 记住从哪个分类进来的，返回时回到原处（并重渲染该分类）
+  var detailReturnCat = 'home';
+
+  function detailKV(label, value, opts) {
+    opts = opts || {};
+    var valHtml = opts.html ? value : esc(value == null ? '' : String(value));
+    var cls = 'detail-kv' + (opts.mono ? ' detail-kv-mono' : '') + (opts.block ? ' detail-kv-block' : '');
+    return '<div class="' + cls + '"><span class="detail-kv-label">' + esc(label) + '</span>' +
+      '<span class="detail-kv-value">' + valHtml + '</span></div>';
+  }
+
+  function detailShell(crumb, inner) {
+    el('detail-crumb').textContent = crumb;
+    el('detail-body').innerHTML = inner;
+  }
+
+  function openImageDetail(row) {
+    if (!row) { toast('找不到这张图片', true); return; }
+    var url = row.url || ('/api/images/files/' + row.file);
+    var seed = row.seed ? String(row.seed) : '—';
+    var size = (row.width && row.height) ? (row.width + ' × ' + row.height) : '—';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media"><img class="detail-img" src="' + esc(url) + '" alt="' + esc(row.prompt || '') + '"></div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc((row.prompt || '文生图作品').slice(0, 80)) + '</div>' +
+          '<div class="detail-meta-line">' + esc(size) + ' · ' + esc(row.style || 'none') + ' · ' + esc(timeAgo(row.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('提示词', row.prompt || '—', { block: true }) +
+            (row.negative_prompt ? detailKV('负面提示', row.negative_prompt, { block: true }) : '') +
+            detailKV('画风', row.style || 'none') +
+            detailKV('质量', row.quality || 'standard') +
+            detailKV('模型', row.model || 'klein') +
+            detailKV('尺寸', size) +
+            detailKV('种子', seed, { mono: true }) +
+            detailKV('耗时', row.elapsed_ms ? (Math.round(row.elapsed_ms / 100) / 10) + 's' : '—') +
+            detailKV('创建时间', row.created_at || '—') +
+          '</div>' +
+          '<div class="detail-actions">' +
+            '<a class="btn btn-primary btn-sm" href="' + esc(url) + '" download>下载原图</a>' +
+            '<button class="btn btn-secondary btn-sm" data-detail-reuse="' + esc(row.id) + '">复用参数再生成</button>' +
+            '<button class="btn btn-ghost btn-sm" data-detail-delete-image="' + esc(row.id) + '">删除</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('图片详情 · ' + (row.width || '') + '×' + (row.height || ''), inner);
+    switchView('detail');
+  }
+
+  function openTaskDetail(tid) {
+    el('detail-body').innerHTML = '<div class="home-empty">加载中…</div>';
+    switchView('detail');
+    el('detail-crumb').textContent = '视频任务详情 · #' + tid;
+    api('/api/tasks/' + tid).then(function (task) {
+      renderTaskDetail(task);
+    }).catch(function () {
+      el('detail-body').innerHTML = '<div class="home-empty">任务加载失败。请确认 Python 引擎在运行。</div>';
+    });
+  }
+
+  function taskArtifact(task, kind) {
+    var list = (task && task.artifacts) || [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (list[i] && list[i].kind === kind) { return list[i]; }
+    }
+    return null;
+  }
+
+  function stepDotCls(status) {
+    var s = String(status || '').toUpperCase();
+    if (s === 'SUCCEEDED') { return 'done'; }
+    if (s === 'RUNNING') { return 'running'; }
+    if (s === 'FAILED') { return 'failed'; }
+    if (s === 'WAITING_INPUT') { return 'waiting'; }
+    return 'pending';
+  }
+
+  function renderTaskDetail(task) {
+    if (!task) {
+      el('detail-body').innerHTML = '<div class="home-empty">任务不存在。</div>';
+      return;
+    }
+    var statusLabel = STATUS_TEXT[task.status] || task.status || '';
+    var badgeCls = ' hr-badge-' + String(task.status || '').toLowerCase();
+    var tid = task.task_id != null ? task.task_id : task.id;
+    var videoArt = taskArtifact(task, 'video');
+    var coverArt = taskArtifact(task, 'cover');
+    var videoUrl = videoArt ? ('/api/tasks/' + tid + '/artifacts/' + videoArt.id) : '';
+    var coverUrl = coverArt ? ('/api/tasks/' + tid + '/artifacts/' + coverArt.id) : '';
+
+    // 步骤条
+    var steps = (task.steps || []);
+    var stepsHtml = steps.map(function (s) {
+      return '<div class="detail-step detail-step-' + stepDotCls(s.status) + '">' +
+        '<span class="detail-step-dot"></span>' +
+        '<span class="detail-step-name">' + esc(s.title || s.code || '') + '</span>' +
+        '<span class="detail-step-state">' + esc(STEP_TEXT[s.status] || s.status || '') + '</span>' +
+        '</div>';
+    }).join('');
+
+    // 脚本 / 分镜
+    var script = (task.steps || []).filter(function (s) { return s.code === 'SCRIPT'; })[0];
+    var scriptData = (script && script.payload) || {};
+    var shotsHtml = '';
+    if (scriptData.script && scriptData.script.shots) {
+      shotsHtml = scriptData.script.shots.map(function (shot, idx) {
+        return '<div class="detail-shot">' +
+          '<div class="detail-shot-idx">' + (idx + 1) + '</div>' +
+          '<div class="detail-shot-body"><div class="detail-shot-h">' + esc(shot.headline || '') + '</div>' +
+          '<div class="detail-shot-b">' + esc(shot.body || '') + '</div></div>' +
+          '</div>';
+      }).join('');
+    }
+
+    var mediaHtml;
+    if (videoUrl) {
+      mediaHtml = '<video class="detail-video" controls src="' + esc(videoUrl) + '"' +
+        (coverUrl ? ' poster="' + esc(coverUrl) + '"' : '') +
+        '></video>';
+    } else {
+      mediaHtml = '<div class="detail-video detail-video-empty"><div class="hr-play">▶</div>' +
+        '<div class="subtle">还没有成片，任务在 ' + esc(statusLabel) + '</div></div>';
+    }
+
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media">' + mediaHtml + '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc((task.brief || '视频任务').slice(0, 80)) + '</div>' +
+          '<div class="detail-meta-line">任务 #' + esc(String(tid)) + ' · <span class="hr-badge' + badgeCls + '">' + esc(statusLabel) + '</span>' +
+            (task.style ? ' · ' + esc(task.style) : '') + ' · ' + esc(timeAgo(task.updated_at || task.created_at)) + '</div>' +
+          '<div class="detail-steps">' + stepsHtml + '</div>' +
+          (scriptData.script ? (
+            '<div class="detail-kvs">' +
+              detailKV('标题', scriptData.script.title || task.brief || '—', { block: true }) +
+              (scriptData.script.caption ? detailKV('发布文案', scriptData.script.caption, { block: true }) : '') +
+              (scriptData.script.tags && scriptData.script.tags.length ? detailKV('标签', (scriptData.script.tags || []).join(' ')) : '') +
+            '</div>'
+          ) : '') +
+          '<div class="detail-actions">' +
+            (videoUrl ? '<a class="btn btn-primary btn-sm" href="' + esc(videoUrl) + '" download>下载成片</a>' : '') +
+            '<button class="btn btn-secondary btn-sm" data-detail-open-task="' + esc(String(tid)) + '">在管线里打开</button>' +
+          '</div>' +
+          (shotsHtml ? '<div class="detail-section-title">分镜</div><div class="detail-shots">' + shotsHtml + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    detailShell('视频任务详情 · #' + tid, inner);
+  }
+
+  var STEP_TEXT = { PENDING: '未开始', WAITING_INPUT: '待确认', RUNNING: '进行中', SUCCEEDED: '完成', FAILED: '失败' };
+
+  function openAudioDetail(a) {
+    if (!a) { toast('找不到这段配音', true); return; }
+    var sec = a.duration_ms ? (Math.round(a.duration_ms / 100) / 10) + 's' : '—';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media detail-media-audio">' +
+          '<div class="detail-audio-badge">' + esc(sec) + '</div>' +
+          '<audio class="detail-audio" controls src="' + esc(a.url) + '"></audio>' +
+        '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">配音片段</div>' +
+          '<div class="detail-meta-line">' + esc(a.voice || '') + ' · ' + esc(sec) + ' · ' + esc(timeAgo(a.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('配音文本', a.text || '—', { block: true }) +
+            detailKV('音色', a.voice || '—') +
+            (a.rate != null ? detailKV('语速', String(a.rate).indexOf('%') >= 0 ? a.rate : (a.rate + '%')) : '') +
+            (a.volume != null ? detailKV('音量', String(a.volume).indexOf('%') >= 0 ? a.volume : (a.volume + '%')) : '') +
+            detailKV('时长', sec) +
+            detailKV('创建时间', a.created_at || '—') +
+          '</div>' +
+          '<div class="detail-actions">' +
+            '<a class="btn btn-primary btn-sm" href="' + esc(a.url) + '" download>下载 WAV</a>' +
+            '<button class="btn btn-ghost btn-sm" data-detail-delete-audio="' + esc(a.id) + '">删除</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('配音详情 · ' + sec, inner);
+    switchView('detail');
+  }
+
+  function openSubtitleDetail(s) {
+    if (!s) { toast('找不到这份字幕', true); return; }
+    var urls = s.urls || {};
+    var links = ['ass', 'srt', 'vtt'].map(function (fmt) {
+      return urls[fmt] ? '<a class="btn btn-secondary btn-sm" href="' + esc(urls[fmt]) + '" download>下载 .' + fmt + '</a>' : '';
+    }).join('');
+    var cues = s.cues || [];
+    var cueHtml = cues.length ? cues.map(function (c) {
+      return '<div class="detail-cue"><span class="detail-cue-time">' + esc(fmtCueTime(c.start_ms)) + ' – ' + esc(fmtCueTime(c.end_ms)) + '</span>' +
+        '<span class="detail-cue-text">' + esc(c.text || '') + '</span></div>';
+    }).join('') : '<div class="subtle">无字幕条目</div>';
+    var inner =
+      '<div class="detail-grid detail-grid-wide">' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">字幕稿</div>' +
+          '<div class="detail-meta-line">' + esc(s.mode || '') + ' · ' + esc((s.cue_count || 0) + ' 条') + ' · 每行≤' + esc(String(s.max_chars || '')) + ' 字 · ' + esc(timeAgo(s.created_at)) + '</div>' +
+          '<div class="detail-kvs">' + detailKV('原文', s.text || '—', { block: true }) + '</div>' +
+          '<div class="detail-actions">' + links + '</div>' +
+          '<div class="detail-section-title">字幕条目</div>' +
+          '<div class="detail-cues">' + cueHtml + '</div>' +
+        '</div>' +
+      '</div>';
+    detailShell('字幕详情 · ' + (s.cue_count || 0) + ' 条', inner);
+    switchView('detail');
+  }
+
+  function fmtCueTime(ms) {
+    if (ms == null) { return '--:--'; }
+    var total = Math.round(ms / 1000);
+    var m = Math.floor(total / 60);
+    var sec = total % 60;
+    return m + ':' + (sec < 10 ? '0' + sec : sec);
+  }
+
+  function openCopyDetail(c) {
+    if (!c) { toast('找不到这份文案', true); return; }
+    var kindLabel = COPY_KIND_LABELS[c.kind] || c.kind || '文案';
+    var styleLabel = '';
+    for (var i = 0; i < COPY_STYLES.length; i += 1) {
+      if (COPY_STYLES[i].key === c.style) { styleLabel = COPY_STYLES[i].label; break; }
+    }
+    var bodyHtml = esc(c.text || '').replace(/\n/g, '<br>');
+    var inner =
+      '<div class="detail-grid detail-grid-wide">' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc(kindLabel) + ' · ' + esc((c.topic || '').slice(0, 20)) + '</div>' +
+          '<div class="detail-meta-line">' + esc(kindLabel) + ' · ' + esc(styleLabel || '默认') + ' · ' + esc((c.text || '').length) + ' 字 · ' + esc(timeAgo(c.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('主题', c.topic || '—') +
+            detailKV('模型', c.model || '—', { mono: true }) +
+            detailKV('耗时', Math.round((c.elapsed_ms || 0) / 1000) + 's') +
+          '</div>' +
+          '<div class="detail-section-title">文案正文</div>' +
+          '<div class="copy-body">' + bodyHtml + '</div>' +
+          '<div class="detail-actions"><button class="btn btn-secondary sm" id="detail-copy-text">复制全文</button></div>' +
+        '</div>' +
+      '</div>';
+    detailShell('文案详情 · ' + kindLabel, inner);
+    var btn = el('detail-copy-text');
+    if (btn) { btn.addEventListener('click', function () { copyText(c.text || ''); }); }
+    switchView('detail');
+  }
+
+  function openEditDetail(e) {
+    if (!e) { toast('找不到这条编辑记录', true); return; }
+    var label = EDIT_ACTION_LABELS[e.action] || e.action || '处理';
+    var media = e.action === 'extract'
+      ? '<audio controls style="width:100%" src="' + esc(e.url) + '"></audio>'
+      : '<video controls style="width:100%;border-radius:12px;background:#000" src="' + esc(e.url) + '"></video>';
+    var inner =
+      '<div class="detail-grid">' +
+        '<div class="detail-media">' + media + '</div>' +
+        '<div class="detail-info">' +
+          '<div class="detail-title">' + esc(label) + '</div>' +
+          '<div class="detail-meta-line">' + esc(((e.duration_ms || 0) / 1000).toFixed(1)) + 's · ' + esc(Math.round((e.size || 0) / 1024)) + ' KB · ' + esc(timeAgo(e.created_at)) + '</div>' +
+          '<div class="detail-kvs">' +
+            detailKV('处理方式', label) +
+            detailKV('源素材', e.source || '—', { mono: true }) +
+            detailKV('耗时', (e.elapsed_ms || 0) + ' ms') +
+          '</div>' +
+          '<div class="detail-actions"><a class="btn btn-secondary sm" href="' + esc(e.url) + '" download>下载结果</a></div>' +
+        '</div>' +
+      '</div>';
+    detailShell('编辑详情 · ' + label, inner);
+    switchView('detail');
+  }
+
+  function backFromDetail() {
+    switchView(detailReturnCat || 'home');
+    renderCategory(detailReturnCat || 'home');
+  }
+
+  function bindDetail() {
+    var back = el('btn-detail-back');
+    if (back) { back.addEventListener('click', backFromDetail); }
+    var body = el('detail-body');
+    if (!body) { return; }
+    body.addEventListener('click', function (event) {
+      var reuse = event.target.closest('[data-detail-reuse]');
+      if (reuse) { restoreParams(reuse.getAttribute('data-detail-reuse')); return; }
+      var delImg = event.target.closest('[data-detail-delete-image]');
+      if (delImg) {
+        var iid = delImg.getAttribute('data-detail-delete-image');
+        if (!window.confirm('删除这张图片？')) { return; }
+        api('/api/images/' + iid, { method: 'DELETE' }).then(function () {
+          toast('已删除');
+          backFromDetail();
+        }).catch(function () { toast('删除失败', true); });
+        return;
+      }
+      var delAudio = event.target.closest('[data-detail-delete-audio]');
+      if (delAudio) {
+        var aid = delAudio.getAttribute('data-detail-delete-audio');
+        if (!window.confirm('删除这段配音？')) { return; }
+        api('/api/audio/' + aid, { method: 'DELETE' }).then(function () {
+          toast('已删除');
+          backFromDetail();
+        }).catch(function () { toast('删除失败', true); });
+        return;
+      }
+      var openTask = event.target.closest('[data-detail-open-task]');
+      if (openTask) {
+        var tid = openTask.getAttribute('data-detail-open-task');
+        switchView('video');
+        if (window.__videoBoot) { window.__videoBoot(); }
+        setTimeout(function () {
+          var node = document.querySelector('#task-list [data-task="' + tid + '"]');
+          if (node) { node.click(); }
+        }, 300);
+      }
+    });
+  }
+
+  function bindHome() {
+    var wrap = el('home-recent');
+    if (!wrap) { return; }
+    wrap.addEventListener('click', function (event) {
+      var imgBtn = event.target.closest('[data-open-image]');
+      if (imgBtn) {
+        var id = imgBtn.getAttribute('data-open-image');
+        detailReturnCat = state.cat || 'home';
+        var row = null;
+        for (var i = 0; i < historyRows.length; i += 1) {
+          if (String(historyRows[i].id) === String(id)) { row = historyRows[i]; break; }
+        }
+        if (!row) {
+          api('/api/images/history?limit=200').then(function (rows) {
+            historyRows = rows || [];
+            var found = null;
+            for (var k = 0; k < historyRows.length; k += 1) {
+              if (String(historyRows[k].id) === String(id)) { found = historyRows[k]; break; }
+            }
+            if (found) { openImageDetail(found); }
+          }).catch(function () {});
+          return;
+        }
+        openImageDetail(row);
+        return;
+      }
+      var taskBtn = event.target.closest('[data-open-task]');
+      if (taskBtn) {
+        detailReturnCat = state.cat || 'home';
+        openTaskDetail(taskBtn.getAttribute('data-open-task'));
+        return;
+      }
+      var audioBtn = event.target.closest('[data-open-audio]');
+      if (audioBtn) {
+        detailReturnCat = 'audio';
+        var aid = audioBtn.getAttribute('data-open-audio');
+        var arow = null;
+        for (var ai = 0; ai < audioRecentRows.length; ai += 1) {
+          if (String(audioRecentRows[ai].id) === String(aid)) { arow = audioRecentRows[ai]; break; }
+        }
+        openAudioDetail(arow);
+        return;
+      }
+      var subBtn = event.target.closest('[data-open-subtitle]');
+      if (subBtn) {
+        detailReturnCat = 'subtitle';
+        var sid = subBtn.getAttribute('data-open-subtitle');
+        var srow = null;
+        for (var si = 0; si < subtitleRecentRows.length; si += 1) {
+          if (String(subtitleRecentRows[si].id) === String(sid)) { srow = subtitleRecentRows[si]; break; }
+        }
+        openSubtitleDetail(srow);
+        return;
+      }
+      var copyBtn = event.target.closest('[data-open-copy]');
+      if (copyBtn) {
+        detailReturnCat = 'text';
+        var cid = copyBtn.getAttribute('data-open-copy');
+        var crow = null;
+        for (var ci = 0; ci < copyRecentRows.length; ci += 1) {
+          if (String(copyRecentRows[ci].id) === String(cid)) { crow = copyRecentRows[ci]; break; }
+        }
+        openCopyDetail(crow);
+        return;
+      }
+      var editBtn = event.target.closest('[data-open-edit]');
+      if (editBtn) {
+        detailReturnCat = 'edit';
+        var eid = editBtn.getAttribute('data-open-edit');
+        var erow = null;
+        for (var ei = 0; ei < editRecentRows.length; ei += 1) {
+          if (String(editRecentRows[ei].id) === String(eid)) { erow = editRecentRows[ei]; break; }
+        }
+        openEditDetail(erow);
+        return;
+      }
+    });
   }
 
   /* ---------------- 视图切换 ---------------- */
 
   function switchView(name) {
-    el('view-home').classList.toggle('active', name === 'home');
+    // 分类页（image/edit/text 等）都渲染在 view-home 容器里，需归一到 home 才能正确显示。
+    var isCat = name !== 'studio' && name !== 'video' && name !== 'audio' && name !== 'subtitle'
+      && name !== 'detail' && name !== 'copy' && name !== 'edit';
+    el('view-home').classList.toggle('active', name === 'home' || isCat);
     el('view-studio').classList.toggle('active', name === 'studio');
     el('view-video').classList.toggle('active', name === 'video');
+    el('view-audio').classList.toggle('active', name === 'audio');
+    el('view-subtitle').classList.toggle('active', name === 'subtitle');
+    if (el('view-copy')) { el('view-copy').classList.toggle('active', name === 'copy'); }
+    if (el('view-edit')) { el('view-edit').classList.toggle('active', name === 'edit'); }
+    if (el('view-detail')) { el('view-detail').classList.toggle('active', name === 'detail'); }
     el('btn-new-video').hidden = name !== 'video';
   }
 
   // 工具归属哪个分类（用于侧栏高亮与返回时的落点）
   // home 是聚合页，只有别的分类都不认领时才回退到它
+  var TOOL_PRESETS = {
+    'image-generate': {
+      eyebrow: '图片生成',
+      panelTitle: '图片生成',
+      panelDesc: '写描述直接出图；上传参考图则按图重绘。',
+      samples: 'default'
+    },
+    'cover': {
+      eyebrow: '平台封面',
+      panelTitle: '平台封面',
+      panelDesc: '和图片生成同一套参数：给主题、选 9:16 竖屏、一次出多版挑一张。',
+      ratio: '9:16',
+      count: 1,
+      samples: 'cover',
+      placeholder: '写封面主题，例如：3天学会AI剪辑，奶油色背景，大标题小副标题'
+    }
+  };
+
   function catOfTool(toolKey) {
     var key;
     var groups;
@@ -345,17 +1475,197 @@
       if (window.__videoBoot) { window.__videoBoot(); }
       return;
     }
+    if (tool.mode === 'audio') {
+      openAudioWorkspace();
+      return;
+    }
+    if (tool.mode === 'subtitle') {
+      openSubtitleWorkspace();
+      return;
+    }
+    if (tool.mode === 'copy') {
+      openCopyWorkspace();
+      return;
+    }
+    if (tool.mode === 'edit') {
+      openEditWorkspace();
+      return;
+    }
     state.tool = toolKey;
-    el('panel-title').textContent = tool.name;
-    el('panel-desc').textContent = tool.desc;
-    el('tool-eyebrow').textContent = tool.name;
+    var preset = TOOL_PRESETS[toolKey] || {};
+    el('panel-title').textContent = preset.panelTitle || tool.name;
+    el('panel-desc').textContent = preset.panelDesc || tool.desc;
+    el('tool-eyebrow').textContent = preset.eyebrow || tool.name;
     el('ref-group').hidden = false;
+    // 应用预设：画风 / 尺寸 / 张数 / 提示词模板
+    if (preset.style) { state.style = preset.style; }
+    if (preset.ratio) { state.ratio = preset.ratio; }
+    if (preset.count) { state.count = preset.count; }
+    if (preset.samples) { SAMPLES_VARIANT = preset.samples; }
+    else { SAMPLES_VARIANT = 'default'; }
+    if (preset.prompt && !el('f-prompt').value) { el('f-prompt').value = preset.prompt; }
     el('f-prompt').placeholder = state.reference
       ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
-      : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
+      : (preset.placeholder || '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深');
+    try { paintControls(); } catch (e) { /* 控件未就绪时忽略 */ }
     renderSamples();
+    updatePromptCount();
     updatePromptMode();
     switchView('studio');
+  }
+
+  /* ---------------- 设置弹层：模型 / API Key / 服务地址 ---------------- */
+
+  var settingsCache = null;
+
+  function openSettings() {
+    el('settings-mask').hidden = false;
+    el('settings-status').textContent = '';
+    loadSettings();
+  }
+
+  function closeSettings() {
+    el('settings-mask').hidden = true;
+  }
+
+  function loadSettings() {
+    var body = el('settings-body');
+    body.innerHTML = '<div class="settings-loading">读取配置中…</div>';
+    api('/api/settings/options').then(function (opts) {
+      settingsCache = opts || {};
+      return api('/api/settings');
+    }).then(function (data) {
+      renderSettings(data);
+    }).catch(function () {
+      body.innerHTML = '<div class="settings-loading">读取配置失败，请确认后端已启动。</div>';
+    });
+  }
+
+  var SETTINGS_GROUP_TITLES = {
+    llm: '大模型（文案 / 脚本）',
+    image: '出图模型',
+    tts: '配音服务',
+    video: '成片参数'
+  };
+
+  function settingsFieldHtml(item, opts) {
+    var key = item.key;
+    var val = item.value || '';
+    var hint = item.hint ? '<div class="settings-hint">' + esc(item.hint) + '</div>' : '';
+    var overridden = item.overridden ? '<span class="settings-badge">已覆盖</span>' : '';
+
+    // 下拉候选
+    var listAttr = null;
+    if (key === 'llm_model') { listAttr = opts.llm_models; }
+    else if (key === 'image_model') { listAttr = (opts.image_models || []).map(function (m) { return (opts.image_model_labels && opts.image_model_labels[m]) ? m : m; }); }
+    else if (key === 'image_provider') { listAttr = opts.image_providers; }
+    else if (key === 'image_api_base') { listAttr = opts.image_base_urls || opts.llm_base_urls; }
+    else if (key === 'media_render_tts_provider') { listAttr = opts.tts_providers; }
+    else if (key === 'media_render_tts_voice') { listAttr = opts.tts_voices; }
+    else if (key === 'base_url') { listAttr = opts.llm_base_urls; }
+
+    var control;
+    if (item.secret) {
+      control = '<input class="text-input settings-input" type="password" data-key="' + esc(key) +
+        '" placeholder="' + (item.has_value ? '已配置，留空则保持不变' : '未配置') + '" autocomplete="off" />';
+    } else if (listAttr && listAttr.length) {
+      var inList = listAttr.indexOf(val) >= 0;
+      var options = listAttr.map(function (v) {
+        return '<option value="' + esc(v) + '"' + (v === val ? ' selected' : '') + '>' + esc(v) + '</option>';
+      }).join('');
+      if (!inList && val) {
+        options = '<option value="' + esc(val) + '" selected>' + esc(val) + '（当前）</option>' + options;
+      }
+      control = '<input class="text-input settings-input" list="dl-' + esc(key) + '" data-key="' + esc(key) +
+        '" value="' + esc(val) + '" /><datalist id="dl-' + esc(key) + '">' + options + '</datalist>';
+    } else {
+      control = '<input class="text-input settings-input" data-key="' + esc(key) +
+        '" value="' + esc(val) + '" />';
+    }
+
+    return '<div class="settings-field">' +
+      '<div class="settings-label">' + esc(item.label) + overridden + '</div>' +
+      control + hint +
+      '</div>';
+  }
+
+  function renderSettings(data) {
+    var body = el('settings-body');
+    if (!data || !data.groups) {
+      body.innerHTML = '<div class="settings-loading">没有配置项。</div>';
+      return;
+    }
+    var opts = settingsCache || {};
+    var html = '';
+    ['llm', 'image', 'tts', 'video'].forEach(function (group) {
+      var items = data.groups[group] || [];
+      if (!items.length) { return; }
+      html += '<div class="settings-group">';
+      html += '<div class="settings-group-title">' + esc(SETTINGS_GROUP_TITLES[group] || group) + '</div>';
+      html += items.map(function (item) { return settingsFieldHtml(item, opts); }).join('');
+      html += '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  function collectSettings() {
+    var payload = {};
+    var inputs = el('settings-body').querySelectorAll('[data-key]');
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      var key = input.getAttribute('data-key');
+      var val = input.value;
+      if (input.type === 'password') {
+        // 密钥留空 -> 不提交（表示保持不变）
+        if (val === '') { continue; }
+        payload[key] = val;
+      } else {
+        payload[key] = val;
+      }
+    }
+    return payload;
+  }
+
+  function saveSettings() {
+    var btn = el('btn-settings-save');
+    btn.disabled = true;
+    el('settings-status').textContent = '保存中…';
+    api('/api/settings', { method: 'POST', body: JSON.stringify(collectSettings()) })
+      .then(function (res) {
+        el('settings-status').textContent = '已保存';
+        renderSettings(res.settings);
+        // 保存后刷新前端模型预设与健康状态
+        if (typeof loadOptions === 'function') { loadOptions(); }
+        toast('配置已保存');
+      })
+      .catch(function () {
+        el('settings-status').textContent = '保存失败';
+        toast('配置保存失败', true);
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  function resetSettings() {
+    api('/api/settings/reset', { method: 'POST' }).then(function (res) {
+      renderSettings(res.settings);
+      el('settings-status').textContent = '已恢复默认';
+      if (typeof loadOptions === 'function') { loadOptions(); }
+      toast('已恢复默认配置');
+    });
+  }
+
+  function bindSettings() {
+    if (!el('btn-settings')) { return; }
+    el('btn-settings').addEventListener('click', openSettings);
+    el('btn-settings-close').addEventListener('click', closeSettings);
+    el('btn-settings-save').addEventListener('click', saveSettings);
+    el('btn-settings-reset').addEventListener('click', resetSettings);
+    el('settings-mask').addEventListener('click', function (event) {
+      if (event.target === el('settings-mask')) { closeSettings(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !el('settings-mask').hidden) { closeSettings(); }
+    });
   }
 
   /* ---------------- 参数面板 ---------------- */
@@ -415,7 +1725,16 @@
     ], getCount, function (key) { state.count = Number(key); });
 
     renderSegmented('f-quality', options.qualities, getQuality, function (key) { state.quality = key; });
-    renderSegmented('f-model', options.models, getModel, function (key) { state.model = key; });
+    renderSegmented('f-model', options.models, getModel, function (key) {
+      state.model = key;
+      var found = options.models.filter(function (m) { return m.key === key; })[0];
+      var hint = el('model-hint');
+      if (hint && found) {
+        hint.textContent = found.openai_style
+          ? '该模型中文渲染强，适合做带文字的封面；走 OpenAI 兼容协议。'
+          : '该模型出图快，但不擅长写中文字，建议后期叠字。';
+      }
+    });
   }
 
   var SAMPLES = {
@@ -428,11 +1747,27 @@
       '换成秋天傍晚的氛围，暖黄逆光，保留人物姿态与构图',
       '改成水彩插画风格，纸纹质感，颜色更克制',
       '改成黑白胶片质感，高对比，颗粒明显'
+    ],
+    // 平台封面：与图片生成同一套参数页，只是预设模板不同
+    cover: [
+      '小红书封面：大字标题「3天学会AI剪辑」，下方一行小字副标题，明亮奶油色背景，留白多',
+      '抖音封面：强对比渐变背景，人物半身特写，标题「别再手动剪视频了」，冲击力强',
+      '知识区封面：左边人物讲解，右边要点列表，蓝色科技感，顶部居中小标题'
     ]
   };
 
+  // 当前样例分组（封面工具会用 cover 组）
+  var SAMPLES_VARIANT = 'default';
+
   function renderSamples() {
-    var list = state.reference ? SAMPLES.remix : SAMPLES.generate;
+    var list;
+    if (state.reference) {
+      list = SAMPLES.remix;
+    } else if (SAMPLES_VARIANT === 'cover') {
+      list = SAMPLES.cover;
+    } else {
+      list = SAMPLES.generate;
+    }
     el('f-samples').innerHTML = list.map(function (text) {
       return '<button class="sample-chip" data-sample="' + esc(text) + '">' + esc(text) + '</button>';
     }).join('');
@@ -442,7 +1777,15 @@
   function updatePromptMode() {
     var hasRef = !!state.reference;
     var button = el('btn-generate');
-    if (!state.busy) { button.textContent = hasRef ? '按参考图重绘' : '生成图片'; }
+    if (!state.busy) {
+      if (!hasImageKey) {
+        button.disabled = true;
+        button.textContent = '未配置出图密钥';
+      } else {
+        button.disabled = false;
+        button.textContent = hasRef ? '按参考图重绘' : '生成图片';
+      }
+    }
     el('f-prompt').placeholder = hasRef
       ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
       : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
@@ -455,11 +1798,26 @@
       paintControls();
       var first = options.ratios.filter(function (r) { return r.key === '9:16'; })[0] || options.ratios[0];
       if (first) { el('ratio-hint').textContent = first.width + ' × ' + first.height; }
+      hasImageKey = !!data.has_image_key;
+      applyKeyGuard();
       if (!data.has_image_key) { toast('没有配置 IMAGE_API_KEY，出图会失败', true); }
       return data;
     }).catch(function (err) {
       toast('读取预设失败：' + err.message, true);
     });
+  }
+
+  // 未配置出图密钥时禁用生成按钮，而不是等用户点了才报错。
+  function applyKeyGuard() {
+    var button = el('btn-generate');
+    if (!button) { return; }
+    if (!hasImageKey && !state.busy) {
+      button.disabled = true;
+      button.textContent = '未配置出图密钥';
+    } else if (!state.busy) {
+      button.disabled = false;
+      updatePromptMode();
+    }
   }
 
   /* ---------------- 参考图 ---------------- */
@@ -630,6 +1988,9 @@
         '<div class="tile-bar">' +
           '<b>' + esc(meta) + '</b>' +
           '<span class="tile-tools">' +
+            '<button class="icon-btn" title="复用参数" data-reuse="' + esc(item.id) + '">' +
+              '<svg viewBox="0 0 24 24"><path d="M4 8h9l-2.5-2.5M20 16h-9l2.5 2.5"/><circle cx="18" cy="8" r="2.4"/><circle cx="6" cy="16" r="2.4"/></svg>' +
+            '</button>' +
             '<button class="icon-btn" title="下载" data-download="' + esc(item.url) + '" data-name="' + esc(item.file) + '">' +
               '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg>' +
             '</button>' +
@@ -665,6 +2026,7 @@
   function loadHistory() {
     return api('/api/images/history?limit=40')
       .then(function (rows) {
+        historyRows = rows || [];
         if (state.tab === 'history') { renderHistory(rows); }
         return rows;
       })
@@ -679,7 +2041,7 @@
     }
     if (tab === 'history') {
       api('/api/images/history?limit=40')
-        .then(renderHistory)
+        .then(function (rows) { historyRows = rows || []; renderHistory(rows); })
         .catch(function (err) { toast('读取历史失败：' + err.message, true); });
     } else if (lastItems.length) {
       renderResults({ items: lastItems });
@@ -691,9 +2053,67 @@
   }
 
   function openLightbox(url, meta) {
-    el('lightbox-img').src = url;
-    el('lightbox-meta').textContent = meta || '';
+    // 兼容两种调用：openLightbox(item对象) 或 openLightbox(url, meta)
+    if (url && typeof url === 'object') {
+      var item = url;
+      el('lightbox-img').src = item.url || ('/api/images/files/' + item.file);
+      el('lightbox-meta').textContent = (item.width && item.height ? item.width + '×' + item.height + ' · ' : '') +
+        (item.prompt || item.file || '') + (item.seed ? '  ·  seed ' + item.seed : '');
+    } else {
+      el('lightbox-img').src = url;
+      el('lightbox-meta').textContent = meta || '';
+    }
     el('lightbox').classList.add('open');
+  }
+
+  // 从一条历史记录里把提示词、画风、尺寸、质量、模型、种子回填到左侧面板，
+  // 让用户能"照上次再来一张"或微调后重试。
+  function restoreParams(imageId) {
+    var rows = historyRows.concat(lastItems);
+    var item = null;
+    for (var i = 0; i < rows.length; i += 1) {
+      if (rows[i] && rows[i].id === imageId) { item = rows[i]; break; }
+    }
+    if (!item) { toast('找不到这条历史参数', true); return; }
+
+    el('f-prompt').value = item.prompt || '';
+    el('f-negative').value = item.negative_prompt || '';
+    if (item.style) { state.style = item.style; }
+    if (item.quality) { state.quality = item.quality; }
+    if (item.model) {
+      // 历史里存的是完整模型名（如 flux-3-image-klein），要映射回预设 key。
+      var matched = null;
+      options.models.forEach(function (m) {
+        if (m.key === item.model || m.label === item.model) { matched = m.key; }
+      });
+      // 已知别名兜底
+      if (!matched) {
+        if (/klein/.test(item.model)) { matched = 'klein'; }
+        else if (/schnell/.test(item.model)) { matched = 'schnell'; }
+        else if (/dev/.test(item.model)) { matched = 'dev'; }
+      }
+      if (matched) { state.model = matched; }
+    }
+    // 尺寸：历史里存的是宽高，回推成最接近的预设比例。
+    if (item.width && item.height) {
+      var best = null;
+      options.ratios.forEach(function (r) {
+        if (r.width === item.width && r.height === item.height) { best = r; }
+      });
+      if (best) {
+        state.ratio = best.key;
+        el('ratio-hint').textContent = best.width + ' × ' + best.height;
+      }
+    }
+    el('f-seed').value = String(item.seed || 0);
+    state.count = 1;
+    state.reference = '';
+    clearReference();
+    paintControls();
+    updatePromptCount();
+    updatePromptMode();
+    toast('已回填参数，可以再生成一次');
+    switchView('studio');
   }
 
   function bindGallery() {
@@ -720,8 +2140,14 @@
             var tile = del.closest('.tile');
             if (tile) { tile.remove(); }
             toast('已删除');
+            loadHistory();
           })
           .catch(function (err) { toast('删除失败：' + err.message, true); });
+        return;
+      }
+      var reuse = event.target.closest('[data-reuse]');
+      if (reuse) {
+        restoreParams(reuse.getAttribute('data-reuse'));
       }
     });
 
@@ -735,6 +2161,280 @@
     });
   }
 
+  /* ---------------- 配音工作区 ---------------- */
+
+  var AUDIO_SAMPLES = [
+    '大家好，欢迎来到本期内容。今天我们用三分钟，把这件事讲清楚。',
+    '产品已经上线，点击下方链接即可体验。',
+    '这个开场白适合口播：先抛问题，再给答案，最后留个钩子。'
+  ];
+
+  function openAudioWorkspace() {
+    el('audio-title').textContent = TOOLS['voice-tts'].name;
+    el('audio-eyebrow').textContent = TOOLS['voice-tts'].name;
+    renderAudioSamples();
+    updateAudioCount();
+    loadAudioVoices();
+    loadAudioHistory();
+    switchView('audio');
+  }
+
+  function renderAudioSamples() {
+    var box = el('a-samples');
+    if (!box) { return; }
+    box.innerHTML = AUDIO_SAMPLES.map(function (text) {
+      return '<button class="sample-chip" data-audio-sample="' + esc(text) + '">' + esc(text) + '</button>';
+    }).join('');
+  }
+
+  function updateAudioCount() {
+    el('a-count').textContent = String((el('a-text').value || '').length);
+  }
+
+  function loadAudioVoices() {
+    return api('/api/audio/voices').then(function (data) {
+      state.audioVoices = data.voices || [];
+      var select = el('a-voice');
+      select.innerHTML = state.audioVoices.map(function (v) {
+        return '<option value="' + esc(v.id) + '">' + esc(v.label) + '</option>';
+      }).join('');
+      return data;
+    }).catch(function (err) {
+      toast('读取音色失败：' + err.message, true);
+    });
+  }
+
+  function audioItemHtml(item) {
+    var dur = (item.duration_ms / 1000).toFixed(1);
+    return '' +
+      '<div class="audio-item" data-audio-id="' + esc(item.id) + '">' +
+        '<div class="audio-meta">' +
+          '<div class="audio-title">' + esc(item.text) + '</div>' +
+          '<div class="audio-sub">' + esc(item.voice) + ' · 语速 ' + esc(item.rate) + ' · ' + dur + ' 秒</div>' +
+        '</div>' +
+        '<div class="inline-row">' +
+          '<audio controls preload="none" src="' + esc(item.url) + '"></audio>' +
+          '<button class="icon-btn" title="下载" data-audio-download="' + esc(item.url) + '" data-name="' + esc(item.file) + '">' +
+            '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg>' +
+          '</button>' +
+          '<button class="icon-btn" title="删除" data-audio-delete="' + esc(item.id) + '">' +
+            '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M8 7l1 12h6l1-12"/></svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderAudioItems(items) {
+    var list = el('audio-list');
+    var empty = el('audio-empty');
+    state.audioItems = items || [];
+    el('a-result-title').textContent = items.length ? ('配音记录 · ' + items.length + ' 条') : '还没有配音';
+    if (!items.length) { list.hidden = true; empty.hidden = false; return; }
+    empty.hidden = true;
+    list.hidden = false;
+    list.innerHTML = items.map(audioItemHtml).join('');
+  }
+
+  function loadAudioHistory() {
+    return api('/api/audio/history?limit=30')
+      .then(function (rows) { renderAudioItems(rows); return rows; })
+      .catch(function () { return []; });
+  }
+
+  function generateAudio() {
+    if (state.audioBusy) { return; }
+    var text = (el('a-text').value || '').trim();
+    if (!text) { toast('先写点要念的文案', true); el('a-text').focus(); return; }
+    var voice = el('a-voice').value || '';
+    var rate = Number(el('a-rate').value) || 0;
+    var volume = Number(el('a-volume').value) || 0;
+
+    state.audioBusy = true;
+    var button = el('btn-audio-generate');
+    button.disabled = true;
+    button.textContent = '合成中…';
+    el('a-status').textContent = '正在合成语音，通常 2–8 秒';
+
+    api('/api/audio/tts', { method: 'POST', body: { text: text, voice: voice, rate: rate, volume: volume } })
+      .then(function (item) {
+        var items = [item].concat(state.audioItems.filter(function (row) { return row.id !== item.id; }));
+        renderAudioItems(items);
+        toast('合成完成，' + (item.duration_ms / 1000).toFixed(1) + ' 秒');
+        loadAudioHistory();
+      })
+      .catch(function (err) { toast('合成失败：' + err.message, true); })
+      .then(function () {
+        state.audioBusy = false;
+        button.disabled = false;
+        button.textContent = '合成语音';
+        el('a-status').textContent = '';
+      });
+  }
+
+  function bindAudioWorkspace() {
+    el('btn-audio-back').addEventListener('click', function () {
+      renderCategory(state.cat || 'audio');
+      switchView('home');
+    });
+    el('a-text').addEventListener('input', updateAudioCount);
+    el('a-text').addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { generateAudio(); }
+    });
+    el('a-rate').addEventListener('input', function () { el('a-rate-val').textContent = el('a-rate').value; });
+    el('a-volume').addEventListener('input', function () { el('a-volume-val').textContent = el('a-volume').value; });
+    el('a-samples').addEventListener('click', function (event) {
+      var chip = event.target.closest('[data-audio-sample]');
+      if (!chip) { return; }
+      el('a-text').value = chip.getAttribute('data-audio-sample');
+      updateAudioCount();
+      el('a-text').focus();
+    });
+    el('btn-audio-generate').addEventListener('click', generateAudio);
+
+    var list = el('audio-list');
+    list.addEventListener('click', function (event) {
+      var download = event.target.closest('[data-audio-download]');
+      if (download) {
+        var link = document.createElement('a');
+        link.href = download.getAttribute('data-audio-download');
+        link.download = download.getAttribute('data-name') || 'speech.wav';
+        document.body.appendChild(link); link.click(); link.remove();
+        return;
+      }
+      var del = event.target.closest('[data-audio-delete]');
+      if (del) {
+        var id = del.getAttribute('data-audio-delete');
+        api('/api/audio/' + encodeURIComponent(id), { method: 'DELETE' })
+          .then(function () {
+            var row = del.closest('.audio-item');
+            if (row) { row.remove(); }
+            toast('已删除');
+            loadAudioHistory();
+          })
+          .catch(function (err) { toast('删除失败：' + err.message, true); });
+      }
+    });
+  }
+
+  /* ---------------- 字幕工作区 ---------------- */
+
+  var SUB_MODES = [
+    { key: 'sentence', label: '整句' },
+    { key: 'word', label: '逐词' }
+  ];
+
+  function openSubtitleWorkspace() {
+    el('subtitle-title').textContent = TOOLS['subtitle'].name;
+    el('subtitle-eyebrow').textContent = TOOLS['subtitle'].name;
+    renderSubModes();
+    updateSubCount();
+    switchView('subtitle');
+  }
+
+  function renderSubModes() {
+    var box = el('s-mode');
+    if (!box) { return; }
+    box.innerHTML = SUB_MODES.map(function (m) {
+      var active = m.key === state.subMode ? ' active' : '';
+      return '<button class="seg-item' + active + '" data-sub-mode="' + esc(m.key) + '">' + esc(m.label) + '</button>';
+    }).join('');
+  }
+
+  function updateSubCount() {
+    el('s-count').textContent = String((el('s-text').value || '').length);
+  }
+
+  function cueTime(ms) {
+    var total = Math.max(0, ms || 0);
+    var m = Math.floor(total / 60000);
+    var s = Math.floor((total % 60000) / 1000);
+    var cs = Math.floor((total % 1000) / 10);
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + '.' + (cs < 10 ? '0' : '') + cs;
+  }
+
+  function renderSubtitleResult(item) {
+    var panel = el('subtitle-panel');
+    var empty = el('subtitle-empty');
+    state.subResult = item;
+    if (!item) { panel.hidden = true; empty.hidden = false; return; }
+    empty.hidden = true;
+    panel.hidden = false;
+    el('s-result-title').textContent = '共 ' + item.cue_count + ' 条 · ' + (item.duration_ms / 1000).toFixed(1) + ' 秒';
+
+    var buttons = ['ass', 'srt', 'vtt'].map(function (ext) {
+      var url = (item.urls && item.urls[ext]) || '';
+      return '<button class="btn btn-secondary btn-sm" data-sub-download="' + esc(url) + '" data-name="' + esc(item.base) + '.' + ext + '">下载 ' + ext.toUpperCase() + '</button>';
+    }).join('');
+
+    var rows = (item.cues || []).map(function (cue) {
+      return '<div class="cue-row"><span class="cue-time">' + cueTime(cue.start_ms) + ' → ' + cueTime(cue.end_ms) + '</span>' +
+        '<span class="cue-text">' + esc(cue.text) + '</span></div>';
+    }).join('');
+
+    panel.innerHTML = '' +
+      '<div class="subtitle-toolbar">' +
+        '<span class="subtle">' + esc(item.mode === 'word' ? '逐词切分' : '整句切分') + ' · 每行 ' + item.max_chars + ' 字</span>' +
+        buttons +
+      '</div>' +
+      '<div class="cue-list">' + rows + '</div>';
+  }
+
+  function buildSubtitle() {
+    if (state.subBusy) { return; }
+    var text = (el('s-text').value || '').trim();
+    if (!text) { toast('先贴一段口播稿', true); el('s-text').focus(); return; }
+    var maxChars = Number(el('s-maxchars').value) || 16;
+
+    state.subBusy = true;
+    var button = el('btn-subtitle-build');
+    button.disabled = true;
+    button.textContent = '生成中…';
+    el('s-status').textContent = '正在断句…';
+
+    api('/api/subtitle/build', { method: 'POST', body: { text: text, mode: state.subMode, max_chars: maxChars } })
+      .then(function (item) {
+        renderSubtitleResult(item);
+        toast('生成完成，共 ' + item.cue_count + ' 条');
+      })
+      .catch(function (err) { toast('生成失败：' + err.message, true); })
+      .then(function () {
+        state.subBusy = false;
+        button.disabled = false;
+        button.textContent = '生成字幕';
+        el('s-status').textContent = '';
+      });
+  }
+
+  function bindSubtitleWorkspace() {
+    el('btn-subtitle-back').addEventListener('click', function () {
+      renderCategory(state.cat || 'audio');
+      switchView('home');
+    });
+    el('s-text').addEventListener('input', updateSubCount);
+    el('s-text').addEventListener('keydown', function (event) {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { buildSubtitle(); }
+    });
+    el('s-mode').addEventListener('click', function (event) {
+      var item = event.target.closest('[data-sub-mode]');
+      if (!item) { return; }
+      state.subMode = item.getAttribute('data-sub-mode');
+      renderSubModes();
+    });
+    el('s-maxchars').addEventListener('input', function () {
+      state.subMaxChars = Number(el('s-maxchars').value) || 16;
+      el('s-maxchars-val').textContent = String(state.subMaxChars);
+    });
+    el('btn-subtitle-build').addEventListener('click', buildSubtitle);
+    el('subtitle-panel').addEventListener('click', function (event) {
+      var download = event.target.closest('[data-sub-download]');
+      if (!download) { return; }
+      var link = document.createElement('a');
+      link.href = download.getAttribute('data-sub-download');
+      link.download = download.getAttribute('data-name') || 'subtitle.txt';
+      document.body.appendChild(link); link.click(); link.remove();
+    });
+  }
+
   /* ---------------- 导航 ---------------- */
 
   function bindNav() {
@@ -743,6 +2443,14 @@
       var item = event.target.closest('[data-cat]');
       if (!item) { return; }
       var cat = item.getAttribute('data-cat');
+      // 有主工作区的分类：直接进参数/工作区，跳过功能卡片页
+      var primary = CAT_PRIMARY_TOOL[cat];
+      if (primary && TOOLS[primary] && TOOLS[primary].ready) {
+        state.cat = cat;
+        openTool(primary);
+        return;
+      }
+      // 首页 / 编辑 / 未接通分类：仍展示分类概览页
       renderCategory(cat);
       switchView('home');
     });
@@ -752,9 +2460,41 @@
       if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
     });
 
+    // 首页概览卡片 / 最近作品标题里的分类跳转
+    var statsEl = el('home-stats');
+    if (statsEl) {
+      statsEl.addEventListener('click', function (event) {
+        var jump = event.target.closest('[data-cat-jump]');
+        if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
+      });
+    }
+    var hintEl = el('home-recent-hint');
+    if (hintEl) {
+      hintEl.addEventListener('click', function (event) {
+        var jump = event.target.closest('[data-cat-jump]');
+        if (jump) { renderCategory(jump.getAttribute('data-cat-jump')); }
+      });
+    }
+
     el('group-list').addEventListener('click', function (event) {
       var card = event.target.closest('[data-tool]');
-      if (card) { openTool(card.getAttribute('data-tool')); }
+      if (!card) { return; }
+      var toolKey = card.getAttribute('data-tool');
+      var tool = TOOLS[toolKey];
+      // 已接通的功能直接进参数设置页；未接通的提示
+      if (tool && tool.ready) {
+        openTool(toolKey);
+        return;
+      }
+      // 未接通：跳到其所属分类页，让用户看到该分类下的能力概览
+      var cat = catOfTool(toolKey);
+      if (cat && cat !== 'home') {
+        renderCategory(cat);
+        switchView('home');
+        toast((tool ? tool.name : '该功能') + ' 还在开发中，这里先看该分类概览');
+      } else {
+        toast((tool ? tool.name : '该功能') + ' 还没接通，先用已上线的功能');
+      }
     });
 
     el('btn-back').addEventListener('click', function () {
@@ -775,8 +2515,15 @@
 
   function boot() {
     bindNav();
+    bindSettings();
+    bindHome();
+    bindDetail();
     bindDropzone();
     bindGallery();
+    bindAudioWorkspace();
+    bindSubtitleWorkspace();
+    bindCopyWorkspace();
+    bindEditWorkspace();
     el('f-prompt').addEventListener('input', updatePromptCount);
     el('btn-generate').addEventListener('click', generate);
     el('btn-dice').addEventListener('click', function () {
@@ -794,6 +2541,8 @@
     renderSamples();
     loadOptions();
     loadHistory();
+    loadAudioVoices();
+    el('s-maxchars-val').textContent = String(state.subMaxChars);
 
     try {
       var params = new URLSearchParams(window.location.search);

@@ -94,3 +94,26 @@ desktop.ini
 
 # ================= 例外：文档要用的图 =================
 !docs/screenshots/*.png
+
+# Java standalone launcher 构建产物
+backend-java/standalone-launcher/target/
+
+
+# mavw-standalone 构建产物与依赖
+mavw-standalone/backend/target/
+mavw-standalone/frontend/node_modules/
+mavw-standalone/frontend/dist/
+
+
+# aimedia-module 构建产物与前端依赖
+backend-java/aimedia-module/target/
+backend-java/frontend/node_modules/
+backend-java/frontend/dist/
+
+
+# MPT vendored module runtime artifacts
+vendor/MoneyPrinterTurbo/.venv/
+vendor/MoneyPrinterTurbo/config.toml
+vendor/MoneyPrinterTurbo/storage/
+vendor/MoneyPrinterTurbo/__pycache__/
+backend-python/output/

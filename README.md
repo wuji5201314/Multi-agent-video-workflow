@@ -12,6 +12,71 @@
 
 一句话区别：**MPT 选定参数后只能一口气跑完；本项目每一步产出后都停在 GATE 上等你点头、等你改、或者等你打回。**
 
+## 在 IDEA / PyCharm 里一键启动（推荐）
+
+仓库根 `.run/` 目录里已内置可直接运行的配置（打开项目后，IDE 右上角运行下拉框就能看到）：
+
+| 运行配置 | 作用 | 访问地址 |
+| --- | --- | --- |
+| **后端 · Python 服务 (:8010)** | 起 Python FastAPI 后端（真实能力：出图/TTS/渲染/字幕） | http://127.0.0.1:8010/ |
+| **后端 · Python 开发热重载 (:8010)** | 同上，改代码自动重载（开发用） | http://127.0.0.1:8010/ |
+| **后端 · aimedia 启动器 (MavwApplication :8088)** | 起 Spring Boot 启动器：托管 `backend-java/frontend` 静态页 + 把 `/api/**` 反代到 Python | http://127.0.0.1:8088/ |
+| **前端 · 打开页面** | 用 IDE 内置浏览器打开页面 | http://127.0.0.1:8088/ |
+| **合并 · 启动后端并打开页面** | 一次跑起 Python 后端 + aimedia 启动器 + 打开浏览器 | http://127.0.0.1:8088/ |
+
+**三种启动方式，按需选一：**
+
+- **只想看效果**：跑 `后端 · Python 服务 (:8010)`，浏览器打开 http://127.0.0.1:8010/ 即可（前端由 Python 端静态托管，零构建）。
+- **走 Java 后端 + 前端（推荐标准结构）**：先跑 `后端 · Python 服务 (:8010)`，再跑 `后端 · aimedia 启动器 (MavwApplication :8088)`，打开 http://127.0.0.1:8088/ 。前端所有 `/api` 请求由 Java 启动器透传到 Python，前端无需改任何地址。也可直接双击 `backend-java/aimedia-module/start-backend.bat`。
+- **前端单独热更（可选）**：`cd backend-java/frontend` 后 `npm install && npm run dev`，打开 http://127.0.0.1:5173/ ，Vite 会把 `/api` 代理到 8088。
+- **命令行（只看 Python）**：`cd backend-python` 后 `.\.venv\Scripts\python.exe run.py --port 8010`（或 `scripts\serve.py --port 8010`）。
+
+**首次在 IDEA 打开时若未识别解释器**：`File → Project Structure → SDKs` 添加 `backend-python\.venv\Scripts\python.exe`（Python 3.13），并把项目 SDK 指到它。`.idea` 里已把源码根设为 `backend-python/src`。
+
+> **启动器放哪、为什么这样放**：
+> - 后端启动类在 `backend-java/aimedia-module/src/main/java/com/yanque/aimedia/MavwApplication.java`（包内 `launcher/` 下是 Web 配置与 `/api` 反代）。
+> - 前端启动文件在 `backend-java/frontend/`（`package.json` / `vite.config.js` / `start-frontend.bat`）。
+> - `backend-java/aimedia-module` 里的原有 controller/service 依赖 `yq-admin` 父工程的 `com.yanque.common.*`，全量编译会飘红（属预期的"对照代码"）。启动器通过 Maven `launcher` profile 的 compiler `excludes` 只编译 `MavwApplication + launcher/**`，从而可独立打包运行：
+>   - 打包：`backend-java/aimedia-module` 下 `mvn -Plauncher -DskipTests package` → 产出 `target/aimedia-launcher.jar`
+>   - 在 IDEA 里跑：运行配置已带 `-Dspring.profiles.active=launcher`；若 IDE 直接 Make 报全量编译错，请在 Maven 面板勾选 `launcher` profile 只编译启动器。
+> - 端口约定：Python `8010`、aimedia 启动器 `8088`、前端 dev server `5173`（可选）。
+
+## 可选能力引擎：MoneyPrinterTurbo（MPT）
+
+本项目的"选题/脚本/出片"可以**直接用 MPT 的能力来跑**，也可以**完全不装 MPT**（默认本地引擎，功能齐全）。MPT 是作为 `vendor/MoneyPrinterTurbo` 子模块放进来、通过 HTTP 对接的，主干保留 GATE 中断能力，二者不打架。
+
+- 开关：环境变量 `MAVW_MPT_ENABLED=1` 打开；不设则走本地引擎。
+- 端口：MPT 默认跑在 `8020`（`MAVW_MPT_PORT`），与 Python `8010`、Java `8088` 错开，避免冲突。
+- 解释器：MPT 依赖较重（moviepy / faster-whisper / streamlit 等），**与主 venv 分开**，用 `vendor/MoneyPrinterTurbo/.venv`；通过 `MAVW_MPT_PYTHON` 指向它。
+
+一键准备并启动 MPT：
+
+```powershell
+cd D:\AGI\Multi-agent-video-workflow\vendor\MoneyPrinterTurbo
+# 建独立 venv 并装依赖（清华镜像更快）
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -U pip -i https://pypi.tuna.tsinghua.edu.cn/simple
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 手动起 MPT（本项目也会在 MAVW_MPT_ENABLED=1 时按需自动拉起）
+$env:MPT_HOME="$PWD"
+.\.venv\Scripts\python.exe -m uvicorn app.asgi:app --host 127.0.0.1 --port 8020
+```
+
+让 Python 后端用上 MPT：
+
+```powershell
+$env:MAVW_MPT_ENABLED="1"
+$env:MAVW_MPT_PYTHON="D:\AGI\Multi-agent-video-workflow\vendor\MoneyPrinterTurbo\.venv\Scripts\python.exe"
+$env:MAVW_MPT_PORT="8020"
+.\.venv\Scripts\python.exe run.py --port 8010
+```
+
+要点：
+
+- **首次运行 MPT 需在 `vendor/MoneyPrinterTurbo/config.toml` 里配置大模型 key**（如 `deepseek_api_key`、`moonshot_api_key`，并把 `llm_provider` 改成对应值）。未配 key 时 MPT 的 `/scripts` 会返回 503，本项目会**在约 20 秒内快速失败并静默回退到本地引擎**，流程不受影响（`MAVW_MPT_PROBE_TIMEOUT_SECONDS` 控制该超时，默认 20）。
+- 出片走 MPT 时，成片直接从 MPT 任务产物下载落到 `output/assets/materials/task-<id>/mpt-render.mp4`；失败同样自动回退本地 `VideoPreviewRenderer`。
+- `vendor/MoneyPrinterTurbo` 的 `.venv`、`config.toml`、`storage/` 已在 `.gitignore` 忽略，不会误提交。
+
 ## 快速开始
 
 ```powershell

@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="合并 · 启动后端并打开页面" type="CompoundRunConfigurationType">
+    <toRun name="后端 · Python 服务 (:8010)" type="PythonConfigurationType" />
+    <toRun name="后端 · aimedia 启动器 (MavwApplication :8088)" type="Application" />
+    <toRun name="前端 · 打开页面 (http://127.0.0.1:8088/)" type="JavascriptDebugType" />
+    <method v="2" />
+  </configuration>
+</component>
