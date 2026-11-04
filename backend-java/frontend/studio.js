@@ -949,7 +949,9 @@
   /* ---------------- 视图切换 ---------------- */
 
   function switchView(name) {
-    el('view-home').classList.toggle('active', name === 'home');
+    // 分类页（image/edit/text 等）都渲染在 view-home 容器里，需归一到 home 才能正确显示。
+    var isCat = name !== 'studio' && name !== 'video' && name !== 'audio' && name !== 'subtitle' && name !== 'detail';
+    el('view-home').classList.toggle('active', name === 'home' || isCat);
     el('view-studio').classList.toggle('active', name === 'studio');
     el('view-video').classList.toggle('active', name === 'video');
     el('view-audio').classList.toggle('active', name === 'audio');
