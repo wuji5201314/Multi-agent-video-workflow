@@ -73,13 +73,28 @@ QUALITIES: dict[str, QualityPreset] = {
 DEFAULT_QUALITY = "standard"
 
 # 模型：klein 是蒸馏版最快，dev 质量更好但更慢，schnell 适合草图
+# qwen 系列走 OpenAI 兼容协议（/v1/images/generations），中文渲染强，适合带字封面
+# 注意：模型 ID 随服务商而异，可在「设置 → 出图模型」直接手填覆盖这里
 MODELS: dict[str, str] = {
     "klein": "black-forest-labs/flux-3-image-klein",
     "dev": "black-forest-labs/flux.1-dev",
     "schnell": "black-forest-labs/flux.1-schnell",
+    "qwen": "qwen-image",
+    "qwen-edit": "qwen-image-edit",
+    "seedream": "doubao-seedream-3-0-t2i-250415",
+    "kolors": "Kwai-Kolors/Kolors",
 }
 
 DEFAULT_MODEL = "klein"
+
+# 走 OpenAI 兼容协议（/v1/images/generations）的模型前缀，用于前端提示与尺寸对齐
+OPENAI_STYLE_MODELS = ("qwen", "qwen-edit", "seedream", "kolors")
+
+
+def is_openai_style(model_key: str) -> bool:
+    """该模型档是否走 OpenAI 兼容协议（尺寸需对齐到其支持档位）。"""
+
+    return (model_key or "").lower() in OPENAI_STYLE_MODELS
 
 
 def build_prompt(prompt: str, style: str) -> str:
@@ -101,3 +116,25 @@ def resolve_size(ratio: str, width: int | None, height: int | None) -> tuple[int
         return max(256, min(width, 2048)), max(256, min(height, 2048))
     preset = RATIOS.get(ratio or DEFAULT_RATIO) or RATIOS[DEFAULT_RATIO]
     return preset.width, preset.height
+
+
+# qwen-image / seedream 常见的支持尺寸档，按宽高比就近对齐
+_OPENAI_SIZE_TIERS: tuple[tuple[int, int], ...] = (
+    (1024, 1024),  # 1:1
+    (1328, 1328),  # 1:1 高清
+    (1024, 1536),  # 2:3 竖
+    (768, 1344),   # 9:16 竖
+    (928, 1664),   # 9:16 高竖
+    (1024, 768),   # 3:2 横
+    (1344, 768),   # 16:9 横
+    (1664, 928),   # 16:9 宽
+    (1536, 640),   # 21:9
+)
+
+
+def resolve_openai_size(width: int, height: int) -> tuple[int, int]:
+    """把任意宽高按宽高比就近对齐到 OpenAI 协议支持的尺寸档（避免 4xx）。"""
+
+    target = (width / height) if height else 1.0
+    best = min(_OPENAI_SIZE_TIERS, key=lambda wh: abs((wh[0] / wh[1]) - target))
+    return best

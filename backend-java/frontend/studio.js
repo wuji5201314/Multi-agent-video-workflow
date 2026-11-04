@@ -1,4 +1,4 @@
-/* 工作台前端：分类页（面包屑/标题/提示/分组卡片）+ 图片工具工作区。
+﻿/* 工作台前端：分类页（面包屑/标题/提示/分组卡片）+ 图片工具工作区。
    后端约定：
    GET  /api/images/options   预设
    POST /api/images/generate  生成
@@ -1094,8 +1094,9 @@
     // 下拉候选
     var listAttr = null;
     if (key === 'llm_model') { listAttr = opts.llm_models; }
-    else if (key === 'image_model') { listAttr = opts.image_models; }
+    else if (key === 'image_model') { listAttr = (opts.image_models || []).map(function (m) { return (opts.image_model_labels && opts.image_model_labels[m]) ? m : m; }); }
     else if (key === 'image_provider') { listAttr = opts.image_providers; }
+    else if (key === 'image_api_base') { listAttr = opts.image_base_urls || opts.llm_base_urls; }
     else if (key === 'media_render_tts_provider') { listAttr = opts.tts_providers; }
     else if (key === 'media_render_tts_voice') { listAttr = opts.tts_voices; }
     else if (key === 'base_url') { listAttr = opts.llm_base_urls; }
@@ -1261,7 +1262,16 @@
     ], getCount, function (key) { state.count = Number(key); });
 
     renderSegmented('f-quality', options.qualities, getQuality, function (key) { state.quality = key; });
-    renderSegmented('f-model', options.models, getModel, function (key) { state.model = key; });
+    renderSegmented('f-model', options.models, getModel, function (key) {
+      state.model = key;
+      var found = options.models.filter(function (m) { return m.key === key; })[0];
+      var hint = el('model-hint');
+      if (hint && found) {
+        hint.textContent = found.openai_style
+          ? '该模型中文渲染强，适合做带文字的封面；走 OpenAI 兼容协议。'
+          : '该模型出图快，但不擅长写中文字，建议后期叠字。';
+      }
+    });
   }
 
   var SAMPLES = {

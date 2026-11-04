@@ -9,7 +9,7 @@ from .models import (
     ImageGenerateResponse,
     ImageItem,
 )
-from .providers import FluxClient, FluxError, FluxRequest, VisionDescriber
+from .providers import FluxClient, FluxError, FluxRequest, ImageClient, OpenAIImageClient, VisionDescriber
 from .service import ImageStudio
 
 __all__ = [
@@ -18,9 +18,11 @@ __all__ = [
     "FluxClient",
     "FluxError",
     "FluxRequest",
+    "ImageClient",
     "ImageGenerateRequest",
     "ImageGenerateResponse",
     "ImageItem",
     "ImageStudio",
+    "OpenAIImageClient",
     "VisionDescriber",
 ]

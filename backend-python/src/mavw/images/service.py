@@ -11,7 +11,7 @@ from pathlib import Path
 from ..config import Settings
 from . import presets
 from .models import AnalyzeResponse, ImageGenerateRequest, ImageGenerateResponse, ImageItem
-from .providers import FluxClient, FluxError, FluxRequest, VisionDescriber
+from .providers import FluxError, FluxRequest, ImageClient, VisionDescriber
 from .store import ImageStore
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class ImageStudio:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._flux = FluxClient(settings)
+        self._client = ImageClient(settings)
         self._vision = VisionDescriber(settings)
         self._store = ImageStore(settings)
         self._root = settings.output_dir() / "studio"
@@ -61,6 +61,10 @@ class ImageStudio:
         width, height = presets.resolve_size(request.ratio, request.width, request.height)
         quality = presets.QUALITIES.get(request.quality) or presets.QUALITIES[presets.DEFAULT_QUALITY]
         model = presets.MODELS.get(request.model) or presets.MODELS[presets.DEFAULT_MODEL]
+
+        # qwen/seedream 等 OpenAI 协议模型有固定尺寸档，按比例就近对齐，避免 4xx
+        if presets.is_openai_style(request.model):
+            width, height = presets.resolve_openai_size(width, height)
 
         prompt = presets.build_prompt(request.prompt, request.style)
         reference_note = ""
@@ -144,7 +148,7 @@ class ImageStudio:
         reference: str,
         note: str,
     ) -> ImageItem:
-        result = await self._flux.generate(
+        result = await self._client.generate(
             FluxRequest(
                 prompt=prompt,
                 negative_prompt=negative_prompt,

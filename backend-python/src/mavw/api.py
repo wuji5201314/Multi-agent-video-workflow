@@ -1,4 +1,4 @@
-"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
+﻿"""HTTP 接口层：既服务于本项目管线，也兼容 Java（yq-admin）的成品渲染调用。"""
 
 from __future__ import annotations
 
@@ -30,6 +30,34 @@ from .pipeline.steps import Step
 from .render.models import RenderRequest, RenderResult
 
 logger = logging.getLogger(__name__)
+
+
+# 出图模型的中文显示名：flux 写不好中文，qwen/seedream 中文渲染强，供前端下拉展示
+_IMAGE_MODEL_LABELS: dict[str, str] = {
+    "klein": "FLUX.3 Klein · 快·弱中文",
+    "dev": "FLUX.1 Dev · 质量好·弱中文",
+    "schnell": "FLUX.1 Schnell · 草图",
+    "qwen": "Qwen-Image · 中文强★",
+    "qwen-edit": "Qwen-Image-Edit · 改图/改字",
+    "seedream": "Seedream 3.0 · 中文强",
+    "kolors": "Kolors · 快手可图",
+}
+
+
+def _image_model_choices(presets: Any) -> list[dict[str, Any]]:
+    """把 presets.MODELS 转成 {key,label,model,openai_style} 供前端渲染模型选择。"""
+
+    choices: list[dict[str, Any]] = []
+    for key in presets.MODELS:
+        choices.append(
+            {
+                "key": key,
+                "label": _IMAGE_MODEL_LABELS.get(key, key),
+                "model": presets.MODELS[key],
+                "openai_style": presets.is_openai_style(key),
+            }
+        )
+    return choices
 
 
 async def _read_json(request: Request) -> dict[str, Any]:
@@ -151,8 +179,27 @@ def create_app() -> FastAPI:
                 "black-forest-labs/flux-3-image-klein",
                 "black-forest-labs/flux.1-dev",
                 "black-forest-labs/flux.1-schnell",
+                "qwen-image",
+                "qwen-image-edit",
+                "doubao-seedream-3-0-t2i-250415",
+                "Kwai-Kolors/Kolors",
             ],
             "image_providers": ["nvidia", "openai", "placeholder"],
+            "image_base_urls": [
+                "https://ai.api.nvidia.com/v1/genai",
+                "https://integrate.api.nvidia.com/v1",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "https://ark.cn-beijing.volces.com/api/v3",
+                "https://api.openai.com/v1",
+            ],
+            "image_model_labels": {
+                "black-forest-labs/flux-3-image-klein": "FLUX.3 Klein（快·不擅长中文）",
+                "black-forest-labs/flux.1-dev": "FLUX.1 Dev（质量好·不擅长中文）",
+                "black-forest-labs/flux.1-schnell": "FLUX.1 Schnell（草图）",
+                "qwen-image": "Qwen-Image（中文渲染强·推荐封面）",
+                "qwen-image-edit": "Qwen-Image-Edit（图像编辑/改字）",
+                "doubao-seedream-3-0-t2i-250415": "Seedream（中文强·火山方舟）",
+            },
             "tts_providers": ["edge", "openai", "silent"],
             "tts_voices": [
                 "zh-CN-YunxiNeural",
@@ -259,7 +306,7 @@ def create_app() -> FastAPI:
                 {"key": q.key, "label": q.label, "steps": q.steps, "cfg_scale": q.cfg_scale}
                 for q in presets.QUALITIES.values()
             ],
-            "models": [{"key": key, "label": key} for key in presets.MODELS],
+            "models": _image_model_choices(presets),
             "has_image_key": bool(settings.image_api_key),
             "vision_model": settings.vision_model,
         }
