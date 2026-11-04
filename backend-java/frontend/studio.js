@@ -72,9 +72,9 @@
       tags: ['即将上线']
     },
     'cover': {
-      name: '平台封面', sub: '新手入口', icon: 'cover', ready: false, tone: 'orange',
-      desc: '一张参考图加一个主题，生成小红书、抖音或快手封面。',
-      tags: ['即将上线', '默认 9:16']
+      name: '平台封面', sub: '与图片生成同台', icon: 'cover', ready: true, mode: 'generate', tone: 'orange',
+      desc: '和图片生成同一套参数页：给主题、选 9:16、出多版挑一张。',
+      tags: ['已接通', '默认 9:16']
     },
     'edit-clip': {
       name: '智能剪辑', sub: '自动挑片', icon: 'edit', ready: false, tone: 'blue',
@@ -120,8 +120,8 @@
       desc: '已经接通的功能排在前面，其余功能陆续开放。',
       notice: '生成结果都会进「历史记录」，图片可直接下载。',
       groups: [
-        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'video-pipeline', 'voice-tts', 'subtitle'] },
-        { name: '即将上线', accent: '#c7c7cc', tools: ['cover', 'copy-detail'] }
+        { name: '已接通', accent: '#30d158', tools: ['image-generate', 'cover', 'video-pipeline', 'voice-tts', 'subtitle'] },
+        { name: '即将上线', accent: '#c7c7cc', tools: ['copy-detail'] }
       ]
     },
     image: {
@@ -130,8 +130,7 @@
       desc: '从文字或参考图出发，生成可直接使用的图片与封面。',
       notice: '图片按张计费，一次最多 4 张；上传参考图即切换为重绘，固定种子可复现同一张。',
       groups: [
-        { name: '生成', accent: '#0a84ff', tools: ['image-generate'] },
-        { name: '封面与投放', accent: '#ff9f0a', tools: ['cover'] }
+        { name: '图片与封面', accent: '#0a84ff', tools: ['image-generate', 'cover'] }
       ]
     },
     video: {
@@ -962,6 +961,24 @@
 
   // 工具归属哪个分类（用于侧栏高亮与返回时的落点）
   // home 是聚合页，只有别的分类都不认领时才回退到它
+  var TOOL_PRESETS = {
+    'image-generate': {
+      eyebrow: '图片生成',
+      panelTitle: '图片生成',
+      panelDesc: '写描述直接出图；上传参考图则按图重绘。',
+      samples: 'default'
+    },
+    'cover': {
+      eyebrow: '平台封面',
+      panelTitle: '平台封面',
+      panelDesc: '和图片生成同一套参数：给主题、选 9:16 竖屏、一次出多版挑一张。',
+      ratio: '9:16',
+      count: 1,
+      samples: 'cover',
+      placeholder: '写封面主题，例如：3天学会AI剪辑，奶油色背景，大标题小副标题'
+    }
+  };
+
   function catOfTool(toolKey) {
     var key;
     var groups;
@@ -1012,16 +1029,179 @@
       return;
     }
     state.tool = toolKey;
-    el('panel-title').textContent = tool.name;
-    el('panel-desc').textContent = tool.desc;
-    el('tool-eyebrow').textContent = tool.name;
+    var preset = TOOL_PRESETS[toolKey] || {};
+    el('panel-title').textContent = preset.panelTitle || tool.name;
+    el('panel-desc').textContent = preset.panelDesc || tool.desc;
+    el('tool-eyebrow').textContent = preset.eyebrow || tool.name;
     el('ref-group').hidden = false;
+    // 应用预设：画风 / 尺寸 / 张数 / 提示词模板
+    if (preset.style) { state.style = preset.style; }
+    if (preset.ratio) { state.ratio = preset.ratio; }
+    if (preset.count) { state.count = preset.count; }
+    if (preset.samples) { SAMPLES_VARIANT = preset.samples; }
+    else { SAMPLES_VARIANT = 'default'; }
+    if (preset.prompt && !el('f-prompt').value) { el('f-prompt').value = preset.prompt; }
     el('f-prompt').placeholder = state.reference
       ? '想怎么改，例如：换成秋天傍晚的氛围，保留人物和构图'
-      : '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深';
+      : (preset.placeholder || '描述你想要的画面，例如：清晨书桌上摊开的笔记本与一杯咖啡，暖光侧照，浅景深');
+    try { paintControls(); } catch (e) { /* 控件未就绪时忽略 */ }
     renderSamples();
+    updatePromptCount();
     updatePromptMode();
     switchView('studio');
+  }
+
+  /* ---------------- 设置弹层：模型 / API Key / 服务地址 ---------------- */
+
+  var settingsCache = null;
+
+  function openSettings() {
+    el('settings-mask').hidden = false;
+    el('settings-status').textContent = '';
+    loadSettings();
+  }
+
+  function closeSettings() {
+    el('settings-mask').hidden = true;
+  }
+
+  function loadSettings() {
+    var body = el('settings-body');
+    body.innerHTML = '<div class="settings-loading">读取配置中…</div>';
+    api('/api/settings/options').then(function (opts) {
+      settingsCache = opts || {};
+      return api('/api/settings');
+    }).then(function (data) {
+      renderSettings(data);
+    }).catch(function () {
+      body.innerHTML = '<div class="settings-loading">读取配置失败，请确认后端已启动。</div>';
+    });
+  }
+
+  var SETTINGS_GROUP_TITLES = {
+    llm: '大模型（文案 / 脚本）',
+    image: '出图模型',
+    tts: '配音服务',
+    video: '成片参数'
+  };
+
+  function settingsFieldHtml(item, opts) {
+    var key = item.key;
+    var val = item.value || '';
+    var hint = item.hint ? '<div class="settings-hint">' + esc(item.hint) + '</div>' : '';
+    var overridden = item.overridden ? '<span class="settings-badge">已覆盖</span>' : '';
+
+    // 下拉候选
+    var listAttr = null;
+    if (key === 'llm_model') { listAttr = opts.llm_models; }
+    else if (key === 'image_model') { listAttr = opts.image_models; }
+    else if (key === 'image_provider') { listAttr = opts.image_providers; }
+    else if (key === 'media_render_tts_provider') { listAttr = opts.tts_providers; }
+    else if (key === 'media_render_tts_voice') { listAttr = opts.tts_voices; }
+    else if (key === 'base_url') { listAttr = opts.llm_base_urls; }
+
+    var control;
+    if (item.secret) {
+      control = '<input class="text-input settings-input" type="password" data-key="' + esc(key) +
+        '" placeholder="' + (item.has_value ? '已配置，留空则保持不变' : '未配置') + '" autocomplete="off" />';
+    } else if (listAttr && listAttr.length) {
+      var inList = listAttr.indexOf(val) >= 0;
+      var options = listAttr.map(function (v) {
+        return '<option value="' + esc(v) + '"' + (v === val ? ' selected' : '') + '>' + esc(v) + '</option>';
+      }).join('');
+      if (!inList && val) {
+        options = '<option value="' + esc(val) + '" selected>' + esc(val) + '（当前）</option>' + options;
+      }
+      control = '<input class="text-input settings-input" list="dl-' + esc(key) + '" data-key="' + esc(key) +
+        '" value="' + esc(val) + '" /><datalist id="dl-' + esc(key) + '">' + options + '</datalist>';
+    } else {
+      control = '<input class="text-input settings-input" data-key="' + esc(key) +
+        '" value="' + esc(val) + '" />';
+    }
+
+    return '<div class="settings-field">' +
+      '<div class="settings-label">' + esc(item.label) + overridden + '</div>' +
+      control + hint +
+      '</div>';
+  }
+
+  function renderSettings(data) {
+    var body = el('settings-body');
+    if (!data || !data.groups) {
+      body.innerHTML = '<div class="settings-loading">没有配置项。</div>';
+      return;
+    }
+    var opts = settingsCache || {};
+    var html = '';
+    ['llm', 'image', 'tts', 'video'].forEach(function (group) {
+      var items = data.groups[group] || [];
+      if (!items.length) { return; }
+      html += '<div class="settings-group">';
+      html += '<div class="settings-group-title">' + esc(SETTINGS_GROUP_TITLES[group] || group) + '</div>';
+      html += items.map(function (item) { return settingsFieldHtml(item, opts); }).join('');
+      html += '</div>';
+    });
+    body.innerHTML = html;
+  }
+
+  function collectSettings() {
+    var payload = {};
+    var inputs = el('settings-body').querySelectorAll('[data-key]');
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i];
+      var key = input.getAttribute('data-key');
+      var val = input.value;
+      if (input.type === 'password') {
+        // 密钥留空 -> 不提交（表示保持不变）
+        if (val === '') { continue; }
+        payload[key] = val;
+      } else {
+        payload[key] = val;
+      }
+    }
+    return payload;
+  }
+
+  function saveSettings() {
+    var btn = el('btn-settings-save');
+    btn.disabled = true;
+    el('settings-status').textContent = '保存中…';
+    api('/api/settings', { method: 'POST', body: JSON.stringify(collectSettings()) })
+      .then(function (res) {
+        el('settings-status').textContent = '已保存';
+        renderSettings(res.settings);
+        // 保存后刷新前端模型预设与健康状态
+        if (typeof loadOptions === 'function') { loadOptions(); }
+        toast('配置已保存');
+      })
+      .catch(function () {
+        el('settings-status').textContent = '保存失败';
+        toast('配置保存失败', true);
+      })
+      .then(function () { btn.disabled = false; });
+  }
+
+  function resetSettings() {
+    api('/api/settings/reset', { method: 'POST' }).then(function (res) {
+      renderSettings(res.settings);
+      el('settings-status').textContent = '已恢复默认';
+      if (typeof loadOptions === 'function') { loadOptions(); }
+      toast('已恢复默认配置');
+    });
+  }
+
+  function bindSettings() {
+    if (!el('btn-settings')) { return; }
+    el('btn-settings').addEventListener('click', openSettings);
+    el('btn-settings-close').addEventListener('click', closeSettings);
+    el('btn-settings-save').addEventListener('click', saveSettings);
+    el('btn-settings-reset').addEventListener('click', resetSettings);
+    el('settings-mask').addEventListener('click', function (event) {
+      if (event.target === el('settings-mask')) { closeSettings(); }
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !el('settings-mask').hidden) { closeSettings(); }
+    });
   }
 
   /* ---------------- 参数面板 ---------------- */
@@ -1094,11 +1274,27 @@
       '换成秋天傍晚的氛围，暖黄逆光，保留人物姿态与构图',
       '改成水彩插画风格，纸纹质感，颜色更克制',
       '改成黑白胶片质感，高对比，颗粒明显'
+    ],
+    // 平台封面：与图片生成同一套参数页，只是预设模板不同
+    cover: [
+      '小红书封面：大字标题「3天学会AI剪辑」，下方一行小字副标题，明亮奶油色背景，留白多',
+      '抖音封面：强对比渐变背景，人物半身特写，标题「别再手动剪视频了」，冲击力强',
+      '知识区封面：左边人物讲解，右边要点列表，蓝色科技感，顶部居中小标题'
     ]
   };
 
+  // 当前样例分组（封面工具会用 cover 组）
+  var SAMPLES_VARIANT = 'default';
+
   function renderSamples() {
-    var list = state.reference ? SAMPLES.remix : SAMPLES.generate;
+    var list;
+    if (state.reference) {
+      list = SAMPLES.remix;
+    } else if (SAMPLES_VARIANT === 'cover') {
+      list = SAMPLES.cover;
+    } else {
+      list = SAMPLES.generate;
+    }
     el('f-samples').innerHTML = list.map(function (text) {
       return '<button class="sample-chip" data-sample="' + esc(text) + '">' + esc(text) + '</button>';
     }).join('');
@@ -1801,7 +1997,23 @@
 
     el('group-list').addEventListener('click', function (event) {
       var card = event.target.closest('[data-tool]');
-      if (card) { openTool(card.getAttribute('data-tool')); }
+      if (!card) { return; }
+      var toolKey = card.getAttribute('data-tool');
+      var tool = TOOLS[toolKey];
+      // 已接通的功能直接进参数设置页；未接通的提示
+      if (tool && tool.ready) {
+        openTool(toolKey);
+        return;
+      }
+      // 未接通：跳到其所属分类页，让用户看到该分类下的能力概览
+      var cat = catOfTool(toolKey);
+      if (cat && cat !== 'home') {
+        renderCategory(cat);
+        switchView('home');
+        toast((tool ? tool.name : '该功能') + ' 还在开发中，这里先看该分类概览');
+      } else {
+        toast((tool ? tool.name : '该功能') + ' 还没接通，先用已上线的功能');
+      }
     });
 
     el('btn-back').addEventListener('click', function () {
@@ -1822,6 +2034,7 @@
 
   function boot() {
     bindNav();
+    bindSettings();
     bindHome();
     bindDetail();
     bindDropzone();

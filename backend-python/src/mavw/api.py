@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import get_settings
+from .runtime_settings import RuntimeSettingsStore
 from .audio import AudioStudio
 from .subtitle import SubtitleStudio
 from .images import (
@@ -76,12 +77,23 @@ _MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
+    base_settings = get_settings()
+    runtime = RuntimeSettingsStore(base_settings)
+    settings = runtime.apply()  # 套用用户覆盖（模型 / Key / 服务地址）
     service = PipelineService(settings)
     studio = ImageStudio(settings)
     audio = AudioStudio(settings)
     subtitles = SubtitleStudio(settings)
     app = FastAPI(title="Multi-Agent Video Workflow", version="0.2.0")
+
+    def _rebuild(effective) -> None:
+        """用户改了配置后，用新的 Settings 重建所有持有者。"""
+        nonlocal settings, service, studio, audio, subtitles
+        settings = effective
+        service = PipelineService(settings)
+        studio = ImageStudio(settings)
+        audio = AudioStudio(settings)
+        subtitles = SubtitleStudio(settings)
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
@@ -100,6 +112,59 @@ def create_app() -> FastAPI:
             "has_llm_key": bool(settings.api_key),
             "has_image_key": bool(settings.image_api_key),
             "has_ffmpeg": has_ffmpeg,
+        }
+
+    # ---------------- 用户配置（模型 / API Key / 服务地址） ----------------
+
+    @app.get("/api/settings")
+    async def get_settings_view() -> dict[str, Any]:
+        return runtime.view(settings)
+
+    @app.post("/api/settings")
+    async def save_settings(request: Request) -> dict[str, Any]:
+        payload = await _read_json(request)
+        effective = runtime.save(payload)
+        _rebuild(effective)
+        logger.info("用户配置已更新，覆盖字段: %s", ", ".join(sorted(runtime.load().keys())) or "(无)")
+        return {"status": "ok", "settings": runtime.view(settings)}
+
+    @app.post("/api/settings/reset")
+    async def reset_settings() -> dict[str, Any]:
+        if runtime.path.exists():
+            runtime.path.unlink()
+        effective = runtime.apply()
+        _rebuild(effective)
+        return {"status": "ok", "settings": runtime.view(settings)}
+
+    @app.get("/api/settings/options")
+    async def settings_options() -> dict[str, Any]:
+        """给配置页下拉框用的候选模型清单。"""
+        return {
+            "llm_models": [
+                "deepseek-ai/deepseek-v4.1-flash",
+                "deepseek-ai/deepseek-v3.1",
+                "moonshotai/kimi-k2-instruct",
+                "qwen/qwen3-235b-a22b",
+                "openai/gpt-4.1",
+            ],
+            "image_models": [
+                "black-forest-labs/flux-3-image-klein",
+                "black-forest-labs/flux.1-dev",
+                "black-forest-labs/flux.1-schnell",
+            ],
+            "image_providers": ["nvidia", "openai", "placeholder"],
+            "tts_providers": ["edge", "openai", "silent"],
+            "tts_voices": [
+                "zh-CN-YunxiNeural",
+                "zh-CN-YunjianNeural",
+                "zh-CN-XiaoxiaoNeural",
+                "zh-CN-XiaoyiNeural",
+            ],
+            "llm_base_urls": [
+                "https://integrate.api.nvidia.com/v1",
+                "https://api.openai.com/v1",
+                "https://api.deepseek.com/v1",
+            ],
         }
 
     @app.post("/api/tasks")

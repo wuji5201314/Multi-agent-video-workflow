@@ -902,3 +902,29 @@ button, input, textarea, select { font-family: inherit; color: inherit; }
   .detail-grid { grid-template-columns: 1fr; }
   .detail-media { position: static; }
 }
+
+
+/* ============ 设置弹层 ============ */
+.settings-mask{position:fixed;inset:0;background:rgba(0,0,0,.34);display:flex;align-items:center;justify-content:center;z-index:120;padding:24px}
+.settings-mask[hidden]{display:none}
+.settings-sheet{width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;background:var(--surface,#fff);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.28);overflow:hidden}
+.settings-head{display:flex;justify-content:space-between;gap:16px;padding:20px 22px 14px;border-bottom:1px solid rgba(0,0,0,.06)}
+.settings-title{font-size:17px;font-weight:650;color:var(--text,#1d1d1f)}
+.settings-sub{font-size:12.5px;color:var(--text-2,#6e6e73);margin-top:5px;line-height:1.55}
+.settings-sub code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-size:11.5px}
+.settings-body{padding:8px 22px 18px;overflow:auto}
+.settings-loading{padding:40px 0;text-align:center;color:var(--text-3,#86868b);font-size:13px}
+.settings-group{margin-top:16px}
+.settings-group-title{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--text-3,#86868b);text-transform:uppercase;margin-bottom:10px}
+.settings-field{margin-bottom:12px}
+.settings-label{font-size:13px;font-weight:600;color:var(--text,#1d1d1f);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.settings-badge{font-size:10.5px;font-weight:600;color:#0a84ff;background:rgba(10,132,255,.1);padding:1px 7px;border-radius:20px}
+.settings-input{width:100%}
+.settings-hint{font-size:11.5px;color:var(--text-3,#86868b);margin-top:5px;line-height:1.5}
+.settings-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid rgba(0,0,0,.06);background:rgba(0,0,0,.015)}
+.settings-status{font-size:12.5px;color:var(--text-2,#6e6e73)}
+.settings-foot .spacer{flex:1}
+
+/* ============ 参数页头部（聚合工作区） ============ */
+.panel-preset{margin:2px 0 14px}
+.panel-preset .preset-row{display:flex;gap:8px;flex-wrap:wrap}

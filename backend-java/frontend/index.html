@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark" />
 <title>Multi-Agent Video Workflow · 创作工作台</title>
-<link rel="stylesheet" href="/app.css?v=10" />
+<link rel="stylesheet" href="/app.css?v=11" />
 </head>
 <body>
 
@@ -24,6 +24,10 @@
     <span id="health-text">连接中…</span>
   </div>
   <div class="spacer"></div>
+  <button class="btn btn-secondary" id="btn-settings">
+    <svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>
+    设置
+  </button>
   <button class="btn btn-secondary" id="btn-new-video" hidden>新建视频任务</button>
 </header>
 
@@ -384,9 +388,31 @@
   </div>
 </div>
 
+<!-- 设置弹层：每个人可填自己的模型 / API Key / 服务地址 -->
+<div class="settings-mask" id="settings-mask" hidden>
+  <div class="settings-sheet">
+    <div class="settings-head">
+      <div>
+        <div class="settings-title">模型与密钥设置</div>
+        <div class="settings-sub">这里的配置只保存在本机 <code>output/settings.json</code>，每位使用者可以填自己的模型与 Key。留空表示沿用服务器默认（环境变量）。</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btn-settings-close">关闭</button>
+    </div>
+    <div class="settings-body" id="settings-body">
+      <div class="settings-loading">读取配置中…</div>
+    </div>
+    <div class="settings-foot">
+      <button class="btn btn-ghost btn-sm" id="btn-settings-reset">恢复默认</button>
+      <div class="spacer"></div>
+      <span class="settings-status" id="settings-status"></span>
+      <button class="btn btn-primary btn-sm" id="btn-settings-save">保存配置</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
-<script src="/app.js?v=10"></script>
-<script src="/studio.js?v=10"></script>
+<script src="/app.js?v=11"></script>
+<script src="/studio.js?v=11"></script>
 </body>
 </html>
