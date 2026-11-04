@@ -377,22 +377,42 @@
     if (!payload.video_object_key && !artifact) {
       return '<div class="subtle">成片还没生成。</div>';
     }
-    var html = '<div class="preview-wrap">';
-    if (artifact) {
-      var src = '/api/tasks/' + task.task_id + '/artifacts/' + artifact.id;
-      html += '<video class="preview-video" controls preload="metadata" src="' + src + '"></video>';
-      html += '<div class="inline-row" style="margin-top:10px">';
-      html += '<a class="btn btn-primary btn-sm" href="' + esc(src) + '" download="成片-' + task.task_id + '.mp4">下载成片</a>';
-      html += '</div>';
-    } else {
-      html += '<div class="preview-video"></div>';
-    }
-    html += '<div class="kv">';
-    html += kvRow('时长', payload.duration_ms ? (payload.duration_ms / 1000).toFixed(2) + ' 秒' : '—');
-    html += kvRow('体积', payload.video_file_size ? (payload.video_file_size / 1024 / 1024).toFixed(2) + ' MB' : '—');
-    html += kvRow('成片对象', payload.video_object_key || '—');
-    html += kvRow('封面对象', payload.cover_object_key || '—');
-    html += '</div></div>';
+    var src = artifact ? ('/api/tasks/' + task.task_id + '/artifacts/' + artifact.id) : '';
+    var media = src
+      ? '<video class="fin-video" controls preload="metadata" src="' + esc(src) + '"></video>'
+      : '<div class="fin-video fin-video-empty"><div class="hr-play">▶</div><span>成片生成中…</span></div>';
+
+    var metrics = [
+      ['时长', payload.duration_ms ? (payload.duration_ms / 1000).toFixed(2) + ' 秒' : '—'],
+      ['体积', payload.video_file_size ? (payload.video_file_size / 1024 / 1024).toFixed(2) + ' MB' : '—']
+    ].map(function (row) {
+      return '<div class="fin-metric"><span class="fin-metric-k">' + esc(row[0]) + '</span>' +
+        '<span class="fin-metric-v">' + esc(row[1]) + '</span></div>';
+    }).join('');
+
+    var files = [
+      ['成片文件', payload.video_object_key || (artifact ? artifact.path : '—')],
+      ['封面文件', payload.cover_object_key || '—']
+    ].map(function (row) {
+      return '<div class="fin-file"><span class="fin-file-k">' + esc(row[0]) + '</span>' +
+        '<code class="fin-file-v" title="' + esc(row[1]) + '">' + esc(row[1]) + '</code></div>';
+    }).join('');
+
+    var actions = src
+      ? '<div class="fin-actions">' +
+          '<a class="btn btn-primary btn-sm" href="' + esc(src) + '" download="成片-' + task.task_id + '.mp4">下载成片</a>' +
+          '<a class="btn btn-secondary btn-sm" href="' + esc(src) + '" target="_blank" rel="noopener">新窗口预览</a>' +
+        '</div>'
+      : '';
+
+    var html = '<div class="fin-card">' +
+      '<div class="fin-media">' + media + '</div>' +
+      '<div class="fin-side">' +
+        '<div class="fin-metrics">' + metrics + '</div>' +
+        '<div class="fin-files">' + files + '</div>' +
+        actions +
+      '</div>' +
+    '</div>';
     return html;
   }
 
@@ -421,19 +441,21 @@
     var plan = payload.plan || [];
     var body = payload.payload || {};
     var tags = (body.tags || []).join(' ');
-    var html = '<div class="kv">';
-    html += '<div class="kv-row"><span>标题</span><b>' + esc(body.title || '—') + '</b></div>';
-    html += '<div class="kv-row"><span>文案</span><b>' + esc(body.caption || '—') + '</b></div>';
-    html += '<div class="kv-row"><span>标签</span><b>' + esc((body.tags || []).join(' · ') || '—') + '</b></div>';
-    html += '<div class="kv-row"><span>目标平台</span><b>' + esc((body.platforms || []).join(' · ') || '—') + '</b></div>';
-    html += '</div>';
-    html += '<div class="inline-row" style="margin-top:10px">';
-    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc(body.caption || '') + '">复制文案</button>';
-    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc(tags) + '">复制标签</button>';
-    html += '<button class="btn btn-secondary btn-sm" data-copy="' + esc((body.title || '') + '\n' + (body.caption || '') + '\n' + tags) + '">一键复制全部</button>';
-    html += '</div>';
-    html += '<div class="subtle" style="margin:14px 0 8px">发布计划</div>';
-    html += '<div class="code">' + esc(JSON.stringify(plan, null, 2)) + '</div>';
+    var platforms = (body.platforms || []).map(function (p) {
+      return '<span class="pub-platform">' + esc(p) + '</span>';
+    }).join('');
+    var html = '<div class="pub-card">' +
+      '<div class="pub-field"><label>标题</label><div class="pub-title">' + esc(body.title || '—') + '</div></div>' +
+      '<div class="pub-field"><label>发布文案</label><div class="pub-caption">' + esc(body.caption || '—') + '</div></div>' +
+      '<div class="pub-field"><label>标签</label><div class="pub-tags">' + ((body.tags || []).length ? (body.tags || []).map(function (t) { return '<span class="pub-tag">#' + esc(t) + '</span>'; }).join('') : '<span class="subtle">—</span>') + '</div></div>' +
+      '<div class="pub-field"><label>目标平台</label><div class="pub-platforms">' + (platforms || '<span class="subtle">—</span>') + '</div></div>' +
+      '<div class="pub-actions">' +
+        '<button class="btn btn-primary btn-sm" data-copy="' + esc((body.title || '') + '\n' + (body.caption || '') + '\n' + tags) + '">一键复制全部</button>' +
+        '<button class="btn btn-secondary btn-sm" data-copy="' + esc(body.caption || '') + '">仅复制文案</button>' +
+        '<button class="btn btn-secondary btn-sm" data-copy="' + esc(tags) + '">仅复制标签</button>' +
+      '</div>' +
+      '<details class="pub-plan"><summary>查看发布计划</summary><pre class="pub-code">' + esc(JSON.stringify(plan, null, 2)) + '</pre></details>' +
+    '</div>';
     return html;
   }
 
