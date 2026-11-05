@@ -117,3 +117,9 @@ vendor/MoneyPrinterTurbo/config.toml
 vendor/MoneyPrinterTurbo/storage/
 vendor/MoneyPrinterTurbo/__pycache__/
 backend-python/output/
+
+# MPT 字幕字体（体积超过 GitHub 50MB 上限，改用 backend-python/scripts/fetch_mpt_fonts.py 按需下载）
+vendor/MoneyPrinterTurbo/resource/fonts/STHeitiMedium.ttc
+vendor/MoneyPrinterTurbo/resource/fonts/STHeitiLight.ttc
+vendor/MoneyPrinterTurbo/resource/fonts/MicrosoftYaHeiNormal.ttc
+vendor/MoneyPrinterTurbo/resource/fonts/MicrosoftYaHeiBold.ttc

@@ -76,6 +76,12 @@ $env:MAVW_MPT_PORT="8020"
 - **首次运行 MPT 需在 `vendor/MoneyPrinterTurbo/config.toml` 里配置大模型 key**（如 `deepseek_api_key`、`moonshot_api_key`，并把 `llm_provider` 改成对应值）。未配 key 时 MPT 的 `/scripts` 会返回 503，本项目会**在约 20 秒内快速失败并静默回退到本地引擎**，流程不受影响（`MAVW_MPT_PROBE_TIMEOUT_SECONDS` 控制该超时，默认 20）。
 - 出片走 MPT 时，成片直接从 MPT 任务产物下载落到 `output/assets/materials/task-<id>/mpt-render.mp4`；失败同样自动回退本地 `VideoPreviewRenderer`。
 - `vendor/MoneyPrinterTurbo` 的 `.venv`、`config.toml`、`storage/` 已在 `.gitignore` 忽略，不会误提交。
+- **字幕字体不在仓库里**：MPT 烧字幕要用 `resource/fonts/STHeitiMedium.ttc` 等四个字体，单个 53MB 超过 GitHub 上限，已加进 `.gitignore`、不进 git 历史。首次启动 MPT（或流程走到烧字幕）时会自动调用 `backend-python/scripts/fetch_mpt_fonts.py` 从 MPT 官方仓库下载补齐；也可手动准备：
+
+  ```powershell
+  backend-python\.venv\Scripts\python.exe backend-python\scripts\fetch_mpt_fonts.py          # 缺什么补什么
+  backend-python\.venv\Scripts\python.exe backend-python\scripts\fetch_mpt_fonts.py --check  # 只检查
+  ```
 
 ## 快速开始
 

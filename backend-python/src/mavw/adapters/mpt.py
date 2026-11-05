@@ -19,6 +19,7 @@ import os
 import socket
 import subprocess
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -94,6 +95,47 @@ class MptProcess:
     def is_ready(self) -> bool:
         return _port_open(self.host, self.port)
 
+    def _ensure_fonts(self) -> None:
+        """确保字幕渲染需要的字体已就位。
+
+        字体体积超过 GitHub 50MB 上限，未纳入本仓库 git 历史，需按需下载。
+        这里在启动 MPT 前检查；缺失时调用 scripts/fetch_mpt_fonts.py 自动补齐，
+        下载失败不阻断启动（仅告警），因为 MPT 也可能用其它已存在的字体。
+        """
+        fonts_dir = self.vendor / "resource" / "fonts"
+        required = {
+            "STHeitiMedium.ttc": 50 * 1024 * 1024,
+            "STHeitiLight.ttc": 50 * 1024 * 1024,
+            "MicrosoftYaHeiNormal.ttc": 15 * 1024 * 1024,
+            "MicrosoftYaHeiBold.ttc": 12 * 1024 * 1024,
+        }
+        missing = []
+        for name, min_bytes in required.items():
+            path = fonts_dir / name
+            try:
+                if not (path.exists() and path.stat().st_size >= min_bytes):
+                    missing.append(name)
+            except OSError:
+                missing.append(name)
+        if not missing:
+            return
+        script = PROJECT_ROOT / "scripts" / "fetch_mpt_fonts.py"
+        if not script.is_file():
+            warnings.warn(
+                f"字幕字体缺失 {missing}，且未找到 {script}，MPT 烧字幕可能失败。",
+                stacklevel=2,
+            )
+            return
+        try:
+            subprocess.run(
+                [self.python, str(script)],
+                check=False,
+                timeout=600,
+                cwd=str(PROJECT_ROOT),
+            )
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(f"自动下载字幕字体失败：{exc}", stacklevel=2)
+
     def _prepare_config(self) -> None:
         """确保 vendor 里有 config.toml 与必要的运行目录。"""
 
@@ -102,6 +144,7 @@ class MptProcess:
                 f"未找到 MoneyPrinterTurbo vendor 目录：{self.vendor}"
                 "（请先在仓库根 git clone 到 vendor/MoneyPrinterTurbo）"
             )
+        self._ensure_fonts()
         cfg = self.vendor / "config.toml"
         example = self.vendor / "config.example.toml"
         if not cfg.is_file() and example.is_file():
